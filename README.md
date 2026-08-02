@@ -10,7 +10,8 @@ Menu-driven mkv handling, built on mkvtoolnix. Replaces ten shell scripts
 that differed by a single `mkvmerge` flag each.
 
 ```bash
-python3 mkvtool.py "/path/to/folder"    # or run bare and it asks
+python3 mkvtool.py "/path/to/folder"
+python3 mkvtool.py                      # lists the folders below you that hold mkv files
 ```
 
 | Menu | What it does |

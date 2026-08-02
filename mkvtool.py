@@ -25,9 +25,48 @@ def tracks_of(info, kind):
     return [t for t in info['tracks'] if t['type'] == kind]
 
 
+def find_candidates(root='.'):
+    """현재 위치와 바로 아래 디렉토리 중 mkv 가 들어있는 곳."""
+    root = os.path.abspath(root)
+    out = []
+    try:
+        entries = sorted(os.listdir(root))
+    except OSError:
+        return out
+    if any(f.lower().endswith('.mkv') for f in entries):
+        out.append(root)
+    for name in entries:
+        d = os.path.join(root, name)
+        if not os.path.isdir(d):
+            continue
+        try:
+            if any(f.lower().endswith('.mkv') for f in os.listdir(d)):
+                out.append(d)
+        except OSError:
+            pass
+    return out
+
+
 def ask_dir(argv_path=None):
-    raw = argv_path or input("\n📁 작업 폴더 (엔터 시 ./dd): ").strip().strip('"') or './dd'
-    path = os.path.abspath(os.path.expanduser(raw))
+    path = argv_path
+    if not path:
+        cands = find_candidates()
+        if cands:
+            labels = [
+                f"{os.path.relpath(c) if c != os.getcwd() else '.'}"
+                f"  ({sum(1 for f in os.listdir(c) if f.lower().endswith('.mkv'))}개)"
+                for c in cands
+            ]
+            choice = pick("\n📁 작업 폴더 (0=경로 직접 입력)", labels, allow_exit=True)
+            if choice is not None:
+                path = cands[labels.index(choice)]
+        if not path:
+            path = input("\n📁 작업 폴더 경로: ").strip().strip('"')
+    if not path:
+        print("❌ 경로가 필요합니다.")
+        return None, []
+
+    path = os.path.abspath(os.path.expanduser(path))
     if not os.path.isdir(path):
         print(f"❌ 폴더가 없습니다: {path}")
         return None, []
