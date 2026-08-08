@@ -25,8 +25,8 @@ def pick(prompt, options, render):
         print("  잘못된 입력입니다.")
 
 
-def main():
-    base = sys.argv[1] if len(sys.argv) > 1 else input("\n📁 시리즈 폴더 경로: ").strip().strip('"')
+def run(base):
+    """폴더 하나를 받아 TMDB 로 이름을 정리한다. mkvtool 이 자기 폴더를 넘겨 부른다."""
     base = os.path.abspath(os.path.expanduser(base))
     if not os.path.isdir(base):
         print(f"❌ 폴더가 없습니다: {base}")
@@ -101,6 +101,11 @@ def main():
     for r, err in core.apply(total):
         print(f"  {'✅' if not err else '❌'} {r.new_name}" + (f"  {err}" if err else ""))
     return 0
+
+
+def main():
+    base = sys.argv[1] if len(sys.argv) > 1 else input("\n📁 시리즈 폴더 경로: ").strip().strip('"')
+    return run(base)
 
 
 if __name__ == '__main__':

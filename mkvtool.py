@@ -282,12 +282,26 @@ def act_drop_audio(mkvs):
     run_remux(mkvs, ['-a', f'!{idx}'])
 
 
+def act_rename(mkvs):
+    """TMDB 로 이름 정리. renamer 는 requests 가 필요해서 여기서만 늦게 import 한다
+    — mkv 기능만 쓰는 사람이 의존성 없이 돌릴 수 있어야 한다."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        from renamer import cli as renamer_cli
+    except ImportError as e:
+        print(f"\n❌ renamer 를 불러오지 못했습니다: {e}")
+        print("   pip install -r requirements.txt")
+        return
+    renamer_cli.run(os.path.dirname(mkvs[0]))
+
+
 ACTIONS = [
     ("트랙 정보 보기", act_info),
     ("오디오 언어 검사", act_check_audio),
     ("오디오 언어 변경", act_set_audio),
     ("자막 넣기", act_add_subs),
     ("오디오 트랙 제거", act_drop_audio),
+    ("이름 정리 (TMDB)", act_rename),
 ]
 
 
