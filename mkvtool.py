@@ -296,12 +296,12 @@ def act_rename(mkvs):
 
 
 ACTIONS = [
+    ("이름 정리 (TMDB)", act_rename),
     ("트랙 정보 보기", act_info),
     ("오디오 언어 검사", act_check_audio),
     ("오디오 언어 변경", act_set_audio),
     ("자막 넣기", act_add_subs),
     ("오디오 트랙 제거", act_drop_audio),
-    ("이름 정리 (TMDB)", act_rename),
 ]
 
 

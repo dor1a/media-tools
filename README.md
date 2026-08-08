@@ -19,12 +19,12 @@ python3 mkvtool.py                      # lists the folders below you that hold 
 
 | Menu | What it does |
 | --- | --- |
+| 이름 정리 (TMDB) | hands the same folder to the renamer below — first because it is the one used most |
 | 트랙 정보 보기 | video, audio and subtitle tracks per file |
 | 오디오 언어 검사 | reports files whose first audio track is not the expected language |
 | 오디오 언어 변경 | `mkvpropedit`, no remux |
 | 자막 넣기 | muxes `<name>.kor.srt`/`.ass`, optionally dropping existing subtitles |
 | 오디오 트랙 제거 | drops one audio track by id |
-| 이름 정리 (TMDB) | hands the same folder to the renamer below |
 
 Remuxing rewrites the whole file, so it keeps the original as `<name>.backup`
 and asks whether to delete those once the batch finishes — right after you can
