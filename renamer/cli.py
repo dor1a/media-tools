@@ -104,6 +104,8 @@ def run(base):
 
 
 def main():
+    import pathinput
+    pathinput.enable()
     base = sys.argv[1] if len(sys.argv) > 1 else input("\n📁 시리즈 폴더 경로: ").strip().strip('"')
     return run(base)
 

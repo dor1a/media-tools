@@ -306,6 +306,10 @@ ACTIONS = [
 
 
 def main():
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import pathinput
+    pathinput.enable()
+
     for tool in ('mkvmerge', 'mkvpropedit'):
         if not run(['which', tool]).stdout.strip():
             print(f"❌ {tool} 이 없습니다. brew install mkvtoolnix")

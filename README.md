@@ -17,6 +17,10 @@ python3 mkvtool.py "/path/to/folder"
 python3 mkvtool.py                      # lists the folders below you that hold mkv files
 ```
 
+The folder prompt has shell-style editing — arrows, delete, and tab
+completion over directories. Spaces are not treated as separators, so
+`Re Z<tab>` finishes a folder whose name contains them.
+
 | Menu | What it does |
 | --- | --- |
 | 이름 정리 (TMDB) | hands the same folder to the renamer below — first because it is the one used most |
