@@ -3,11 +3,16 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 
 SUB_EXTS = ['.srt', '.ass']
 LANGS = ['kor', 'jpn', 'eng', 'und']
+
+# mkvmerge --gui-mode 는 진행률을 줄 단위로 뱉는다 (기본 모드는 \r 로 덮어써서 파싱이 번거롭다)
+PROGRESS_RE = re.compile(r'#GUI#progress\s+(\d+)%')
+NAME_W = 44
 
 
 def run(cmd):
@@ -110,20 +115,83 @@ def sub_for(mkv):
     return None
 
 
-def remux(mkv, pre_args, sub=None):
-    """Rebuild the mkv, keeping the original as <name>.backup."""
+def short(name):
+    return name if len(name) <= NAME_W else name[:NAME_W - 1] + '…'
+
+
+def remux(mkv, pre_args, sub=None, on_progress=None):
+    """Rebuild the mkv, keeping the original as <name>.backup.
+
+    remux 는 파일 전체를 다시 쓴다. 네트워크 마운트면 GB 단위 왕복이라
+    파일당 수 분이 걸리므로, 진행률을 흘려보내지 않으면 멈춘 것처럼 보인다.
+    """
     tmp = os.path.join(os.path.dirname(mkv), f"temp_{os.path.basename(mkv)}")
-    cmd = ['mkvmerge', '-o', tmp] + pre_args + [mkv]
+    cmd = ['mkvmerge', '--gui-mode', '-o', tmp] + pre_args + [mkv]
     if sub:
         cmd += ['--language', '0:kor', sub]
-    r = run(cmd)
-    if r.returncode not in (0, 1):
+
+    tail = []
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, bufsize=1)
+        for line in p.stdout:
+            m = PROGRESS_RE.search(line)
+            if m:
+                if on_progress:
+                    on_progress(int(m.group(1)))
+            elif line.strip():
+                tail.append(line.strip())
+                del tail[:-4]
+        rc = p.wait()
+    except FileNotFoundError:
+        return False, 'mkvmerge 를 찾을 수 없습니다'
+
+    if rc not in (0, 1):
         if os.path.exists(tmp):
             os.remove(tmp)
-        return False, r.stderr.strip().splitlines()[-1] if r.stderr else 'mkvmerge 실패'
+        return False, tail[-1] if tail else 'mkvmerge 실패'
     os.replace(mkv, f"{mkv}.backup")
     os.replace(tmp, mkv)
     return True, None
+
+
+def run_remux(items, pre_args):
+    """[(mkv, sub)] 또는 [mkv] 를 순차 remux 하면서 진행률을 한 줄로 갱신한다.
+
+    끝나면 이번에 생긴 원본 백업을 지울지 묻는다 — 결과를 본 직후가
+    지우기 좋은 시점이라 별도 메뉴로 두지 않았다.
+    """
+    total = len(items)
+    done = []
+    for i, item in enumerate(items, 1):
+        mkv, sub = item if isinstance(item, tuple) else (item, None)
+        name = short(os.path.basename(mkv))
+        head = f"  [{i}/{total}] {name:<{NAME_W}}"
+
+        def show(pct, head=head):
+            print(f"\r{head} {pct:3d}%", end='', flush=True)
+
+        show(0)
+        ok, err = remux(mkv, pre_args, sub, on_progress=show)
+        print(f"\r  {'✅' if ok else '❌'} [{i}/{total}] {name}"
+              + (f"  {err}" if err else "") + ' ' * 10)
+        if ok:
+            done.append(mkv)
+    offer_backup_cleanup(done)
+
+
+def offer_backup_cleanup(mkvs):
+    baks = [f"{m}.backup" for m in mkvs if os.path.isfile(f"{m}.backup")]
+    if not baks:
+        return
+    size = sum(os.path.getsize(b) for b in baks) / 1024 ** 3
+    print(f"\n원본 백업 {len(baks)}개 ({size:.1f} GB)")
+    if input("지울까요? (y/n): ").strip().lower() == 'y':
+        for b in baks:
+            os.remove(b)
+        print("✅ 지웠습니다.")
+    else:
+        print("남겨뒀습니다. 결과 확인하고 직접 지우면 됩니다.")
 
 
 # --- actions ---------------------------------------------------------------
@@ -200,9 +268,7 @@ def act_add_subs(mkvs):
     if not confirm(len(pairs)):
         return
     print()
-    for mkv, sub in pairs:
-        ok, err = remux(mkv, pre, sub)
-        print(f"  {'✅' if ok else '❌'} {os.path.basename(mkv)}" + (f"  {err}" if err else ""))
+    run_remux(pairs, pre)
 
 
 def act_drop_audio(mkvs):
@@ -213,22 +279,7 @@ def act_drop_audio(mkvs):
     if not confirm(len(mkvs)):
         return
     print()
-    for mkv in mkvs:
-        ok, err = remux(mkv, ['-a', f'!{idx}'])
-        print(f"  {'✅' if ok else '❌'} {os.path.basename(mkv)}" + (f"  {err}" if err else ""))
-
-
-def act_clean_backups(mkvs):
-    baks = [f"{m}.backup" for m in mkvs if os.path.isfile(f"{m}.backup")]
-    if not baks:
-        print("\n삭제할 .backup 파일이 없습니다.")
-        return
-    size = sum(os.path.getsize(b) for b in baks) / 1024**3
-    print(f"\n{len(baks)}개, {size:.1f} GB")
-    if input("정말 삭제할까요? (y/n): ").strip().lower() == 'y':
-        for b in baks:
-            os.remove(b)
-        print("✅ 삭제했습니다.")
+    run_remux(mkvs, ['-a', f'!{idx}'])
 
 
 ACTIONS = [
@@ -237,7 +288,6 @@ ACTIONS = [
     ("오디오 언어 변경", act_set_audio),
     ("자막 넣기", act_add_subs),
     ("오디오 트랙 제거", act_drop_audio),
-    (".backup 정리", act_clean_backups),
 ]
 
 

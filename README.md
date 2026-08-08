@@ -21,7 +21,12 @@ python3 mkvtool.py                      # lists the folders below you that hold 
 | 오디오 언어 변경 | `mkvpropedit`, no remux |
 | 자막 넣기 | muxes `<name>.kor.srt`/`.ass`, optionally dropping existing subtitles |
 | 오디오 트랙 제거 | drops one audio track by id |
-| .backup 정리 | removes the originals left behind by remuxing |
+
+Remuxing rewrites the whole file, so it keeps the original as `<name>.backup`
+and asks whether to delete those once the batch finishes — right after you can
+see whether it worked. It also prints a percentage per file: on a network
+mount a single episode is a multi-GB round trip, and without that the tool
+looks hung.
 
 Two track numbering schemes are in play and the info screen prints both:
 `mkvpropedit` counts audio tracks (`a1`, `a2`), `mkvmerge` uses global track
