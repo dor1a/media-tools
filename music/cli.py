@@ -98,12 +98,12 @@ def best_track(tracks, filename):
     return max(hits, key=lambda t: len(_norm(t['trackName']))) if hits else None
 
 
-def choose_album(f, country):
+def choose_album(f, country, genre):
     """파일 하나로 검색해 앨범과 타입, 수록곡을 정한다.
 
-    (album, kind, tracks, country) — 스토어를 바꿨으면 바뀐 값이 돌아온다.
-    한 폴더에 일본 곡과 한국 곡이 섞이는 게 보통이라, 스토어는 실행 단위가
-    아니라 앨범 단위로 정해질 수 있어야 한다.
+    (album, kind, tracks, country, genre) — 스토어나 장르를 바꿨으면 바뀐 값이
+    돌아온다. 한 폴더에 일본 곡과 한국 곡이 섞이는 게 보통이라, 둘 다 실행
+    단위가 아니라 앨범 단위로 정해질 수 있어야 한다.
     """
     query = core.guess_query(f)
     print(f"\n🔍 검색어: {query}")
@@ -121,16 +121,19 @@ def choose_album(f, country):
             if note:
                 print(f"  {note}")
 
-        raw = input(f"앨범 (0=건너뜀, s=스토어 바꾸기, 지금 {country}): ").strip().lower()
+        raw = input(f"앨범 (0=건너뜀, s=스토어, g=장르, 지금 {country} / {genre}): ").strip().lower()
         if raw == '0':
-            return None, None, None, country
+            return None, None, None, country, genre
         if raw == 's':
             country = ask_country(country) or country
+            continue
+        if raw == 'g':
+            genre = pick("장르 버킷", GENRES, str, default=genre) or genre
             continue
         if raw.isdigit() and 1 <= int(raw) <= len(albums):
             album = albums[int(raw) - 1]
             break
-        print("  번호나 s 를 입력해.")
+        print("  번호나 s, g 를 입력해.")
 
     suggested = core.album_type(album)
     print(f"\n  타입은 {suggested or 'Various Artists 라 폴더 없이'} 로 볼게.")
@@ -139,7 +142,7 @@ def choose_album(f, country):
     else:
         kind = suggested
 
-    return album, kind, core.album_tracks(album['collectionId'], country), country
+    return album, kind, core.album_tracks(album['collectionId'], country), country, genre
 
 
 def plan_moves(files, base, country, genre, full_date):
@@ -151,7 +154,7 @@ def plan_moves(files, base, country, genre, full_date):
 
     for f in files:
         if not reuse:
-            album, kind, tracks, country = choose_album(f, country)
+            album, kind, tracks, country, genre = choose_album(f, country, genre)
             if album is None:
                 print(f"  건너뜀: {f.name}")
                 continue
@@ -271,7 +274,9 @@ def confirm_and_apply(moves):
         print("남은 것이 없습니다.")
         return 0
 
-    if input(f"\n{len(moves)}개를 옮기고 태그를 쓸까? (y): ").strip().lower() != 'y':
+    # 엔터와 y 만 진행. 다른 입력은 오타로 보고 멈춘다 — 여기서부터는 파일이
+    # 실제로 움직인다.
+    if input(f"\n{len(moves)}개를 옮기고 태그를 쓸까? (엔터=응, n=취소): ").strip().lower() not in ('', 'y'):
         print("취소했습니다. 파일은 그대로입니다.")
         return 0
 

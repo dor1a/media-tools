@@ -156,6 +156,10 @@ Requires `ffmpeg`. Only this part needs it; nothing else in the repo does.
 It shows the whole plan and moves nothing until you say so — a wrong move
 into the library is not something you can undo.
 
+The store and the genre are both per album rather than per run, since a
+folder of singles is rarely all one thing — `s` and `g` at the album prompt
+change them and the choice carries to the next file.
+
 Two levels are yours to pick, because the metadata cannot supply them:
 
 - **장르** — the top bucket. Apple's genre does not map onto J-Pop / Utaite /
@@ -198,6 +202,26 @@ the middle of a title, which is a remix credit rather than a feature.
 `core.py` holds the lookups and the path rules, `tags.py` writes ID3v2.4 +
 APEv2 + FLAC with cover art, and `cli.py` is the only part that asks
 questions. Eight scripts used to carry copies of the first two between them.
+
+## kid3
+
+`kid3/SyncTags.qml` copies tag 2 into tags 1 and 3 and saves, for every
+selected file. The library keeps all three on its mp3s — ID3v1, ID3v2.4 and
+APE — and Kid3 has no equivalent of mp3tag's write-all checkboxes, so
+without it that is two menu items per file.
+
+Register it under Settings → Configure Kid3 → User Actions with the command
+`@qml /path/to/kid3/SyncTags.qml`, and it appears in the file list's context
+menu.
+
+Two things had to be found by trying them. `kid3-cli`'s multi-slot argument
+(`set title X 123`) writes tag 2 only, despite the help offering `"12"`. And
+`pasteTags` with the bits combined lands in one slot, so the script pastes
+into each separately.
+
+Turning off "automatically hide unused tags" in Appearance is worth doing
+too: with it on, a file that has no ID3v1 or APE yet shows no field to put
+one in.
 
 ## Not here
 
