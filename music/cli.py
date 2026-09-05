@@ -78,14 +78,30 @@ def ask_country():
     return pick("국가", core.COUNTRY_CODES, str, default='jp')
 
 
-def plan_album(files, base, country, genre, full_date):
-    """파일들을 한 앨범으로 묶어 계획을 만든다. 앨범과 타입은 한 번만 묻는다."""
-    query = core.guess_query(files[0])
+def _norm(text):
+    """비교용으로 문자를 줄인다 — 공백과 기호를 빼고 소문자로."""
+    return ''.join(c for c in text.lower() if c.isalnum())
+
+
+def best_track(tracks, filename):
+    """파일명에 곡명이 들어 있으면 그 트랙. 없으면 None.
+
+    고를 것을 없애지는 않고 기본값만 준다 — 잘못 맞췄을 때 엔터 한 번으로
+    엉뚱한 트랙이 되면 안 된다.
+    """
+    stem = _norm(Path(filename).stem)
+    hits = [t for t in tracks if t.get('trackName') and _norm(t['trackName']) in stem]
+    return max(hits, key=lambda t: len(_norm(t['trackName']))) if hits else None
+
+
+def choose_album(f, country):
+    """파일 하나로 검색해 앨범과 타입, 수록곡을 정한다. (album, kind, tracks)."""
+    query = core.guess_query(f)
     print(f"\n🔍 검색어: {query}")
     albums = core.search_albums(query, country)
     if not albums:
         print("  검색 결과가 없습니다.")
-        return []
+        return None, None, None
 
     album = pick(
         "앨범", albums,
@@ -93,30 +109,54 @@ def plan_album(files, base, country, genre, full_date):
                   f"  ({a.get('trackCount') or '?'}곡)",
     )
     if not album:
-        return []
+        return None, None, None
 
     suggested = core.album_type(album)
-    label = suggested or '(타입 폴더 없음 — Various Artists)'
-    print(f"\n  제안된 타입: {label}")
+    print(f"\n  제안된 타입: {suggested or '(타입 폴더 없음 — Various Artists)'}")
     if input("  그대로 쓸까? (엔터=예, n=고르기): ").strip().lower() == 'n':
         kind = pick("타입", core.TYPES, str)
     else:
         kind = suggested
 
-    tracks = core.album_tracks(album['collectionId'], country)
+    return album, kind, core.album_tracks(album['collectionId'], country)
 
+
+def plan_moves(files, base, country, genre, full_date):
+    """파일마다 검색한다. 폴더가 한 앨범이면 한 번만 고르고 넘어갈 수 있다."""
     moves = []
+    album = kind = tracks = None
+    reuse = False
+    asked_reuse = False
+
     for f in files:
+        if not reuse:
+            album, kind, tracks = choose_album(f, country)
+            if album is None:
+                print(f"  건너뜀: {f.name}")
+                continue
+
         track = pick(
             f"'{f.name}' 의 트랙", tracks,
             lambda t: f"{str(t.get('trackNumber') or '?').zfill(2)} - {t['trackName']}",
+            default=best_track(tracks, f.name),
         )
         if not track:
             print(f"  건너뜀: {f.name}")
             continue
-        dst = core.destination(base, genre, album, track, f.suffix,
-                               full_date=full_date, type_folder=kind)
-        moves.append(core.Move(f, dst, track))
+
+        moves.append(core.Move(
+            f,
+            core.destination(base, genre, album, track, f.suffix,
+                             full_date=full_date, type_folder=kind),
+            track,
+        ))
+
+        # 한 앨범을 통째로 받은 경우가 흔하다. 그때 매번 다시 고르게 하지 않되,
+        # 물어보는 것은 한 번뿐이라 섞인 폴더에서 방해가 되지 않는다.
+        if not asked_reuse and len(files) > 1:
+            asked_reuse = True
+            reuse = input("\n나머지도 같은 앨범? (엔터=아니오, y=예): ").strip().lower() == 'y'
+
     return moves
 
 
@@ -239,7 +279,7 @@ def run_organize(files):
     if not files:
         return 1
 
-    moves = plan_album(files, base, country, genre, full_date)
+    moves = plan_moves(files, base, country, genre, full_date)
     if not moves:
         print("\n옮길 것이 없습니다.")
         return 0
