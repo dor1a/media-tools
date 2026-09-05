@@ -9,6 +9,7 @@
 
 import os
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +20,30 @@ from music import core
 # 라이브러리 최상위 버킷. iTunes 의 장르로는 못 채운다 — Utaite 와 Melody 는
 # 애플에 대응 장르가 없고, 같은 아티스트가 Anime 인지 J-Pop 인지도 사람 기준이다.
 GENRES = ['J-Pop', 'K-Pop', 'C-Pop', 'Pop', 'Anime', 'Game', 'Utaite', 'Melody']
+
+
+def _width(text):
+    """터미널에서 차지하는 칸 수. 한글과 한자는 두 칸이다."""
+    return sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in text)
+
+
+def _pad(text, width):
+    """표시 폭 기준으로 오른쪽을 채운다. ljust 는 글자 수를 세서 한글이 섞이면
+    열이 어긋난다."""
+    return text + ' ' * max(1, width - _width(text))
+
+
+def rule(label=''):
+    """단계 사이 구분선.
+
+    프롬프트가 연달아 나오면 어디까지 답했는지가 화면에서 안 보인다.
+    """
+    total = 56
+    if label:
+        head = f"── {label} "
+        print(f"\n{head}" + "─" * max(3, total - _width(head)))
+    else:
+        print("\n" + "─" * total)
 
 
 def pick(prompt, options, render, default=None, zero='건너뜀'):
@@ -45,7 +70,7 @@ def ask_source():
     경로를 치는 쪽이 더 자연스럽고, 번호만 받으면 그게 오입력이 된다.
     """
     cands = core.find_candidates()
-    print()
+    rule('작업 폴더')
     for i, (d, n) in enumerate(cands, 1):
         print(f"  {i}. {_short_path(d)}  ({n}개)")
     if not cands:
@@ -78,7 +103,8 @@ def _short_path(p):
 
 
 def ask_country(current=None):
-    print("\n어느 나라 스토어에서 찾을까? 같은 앨범이라도 스토어마다 표기랑 발매일이 달라.")
+    rule('스토어')
+    print("어느 나라 스토어에서 찾을까? 같은 앨범이라도 스토어마다 표기랑 발매일이 달라.")
     return pick("스토어", core.COUNTRY_CODES, str, default=current or 'jp')
 
 
@@ -106,7 +132,7 @@ def choose_album(f, country, genre):
     단위가 아니라 앨범 단위로 정해질 수 있어야 한다.
     """
     query = core.guess_query(f)
-    print(f"\n🔍 검색어: {query}")
+    rule(f'🔍 {query}')
 
     while True:
         albums = core.search_albums(query, country)
@@ -193,16 +219,16 @@ def normalize(files):
     keep = [p for p in plans if p[1] == 'keep']
 
     if keep:
-        print(f"\n── 그대로 두는 것 {len(keep)}개 ──")
+        rule(f'그대로 두는 것 {len(keep)}개')
         for f, _, why in keep:
-            print(f"  {f.name}  ({why})")
+            print(f"  {_pad(why, 20)}{f.name}")
     if not todo:
         print("\n변환할 것이 없습니다.")
         return files
 
-    print(f"\n── 변환 {len(todo)}개 ──")
+    rule(f'변환 {len(todo)}개')
     for f, _, why in todo:
-        print(f"  {f.name}\n    {why}")
+        print(f"  {_pad(why, 20)}{f.name}")
     if input("\n변환할까? (엔터=예, n=취소): ").strip().lower() == 'n':
         return []
 
@@ -234,13 +260,15 @@ def describe(files):
     """파일마다 지금 포맷을 적어준다. 바꾸지는 않는다 — 변환은 별도 메뉴다."""
     from music import convert
 
-    print(f"\n── 파일 {len(files)}개 ──")
+    rule(f'파일 {len(files)}개')
     off = 0
     for f in files:
         label, ok = convert.state(f)
         if not ok:
             off += 1
-        print(f"  {f.name}\n    {label}{'' if ok else '   <- mp3 320 아님'}")
+        # 상태를 앞에 정렬해 둔다. 파일마다 두 줄을 쓰면 스무 개만 돼도 화면을
+        # 넘긴다. 어긋난 것은 `!` 로 표시한다 — 기본값 `*` 와 같은 자리다.
+        print(f"{'!' if not ok else ' '} {_pad(label, 12)}{f.name}")
     if off:
         print(f"\n  {off}개가 라이브러리 포맷이 아니야. 바꾸려면 메뉴의 '변환만' 을 먼저 돌려.")
 
@@ -258,7 +286,8 @@ def ask_common(default_base):
 
     장르와 스토어는 여기서 안 묻는다 — 파일 목록을 보고 정할 것들이다.
     """
-    raw_base = input(f"\n라이브러리 루트 (엔터 시 {_short_path(default_base)}): ").strip()
+    rule('설정')
+    raw_base = input(f"라이브러리 루트 (엔터 시 {_short_path(default_base)}): ").strip()
     base = Path(raw_base).expanduser() if raw_base else Path(default_base)
     if not base.is_dir():
         print(f"❌ 그런 폴더가 없습니다: {base}")
@@ -270,7 +299,7 @@ def ask_common(default_base):
 
 def confirm_and_apply(moves):
     """계획을 보여주고, 뺄 것을 받고, 옮긴다."""
-    print("\n── 계획 ──")
+    rule('계획')
     for i, m in enumerate(moves, 1):
         print(f"  {i}. {m.src.name}\n     → {m.dst}")
 
@@ -316,6 +345,7 @@ def run_organize(files, source):
     base, full_date = common
 
     describe(files)
+    rule('장르')
     genre = pick("장르 버킷", GENRES, str)
     if not genre:
         print("장르를 골라야 경로가 정해집니다.")
@@ -337,6 +367,7 @@ def run_auto(files, source):
     base, full_date = common
 
     describe(files)
+    rule('장르')
     genre = pick("장르 버킷", GENRES, str)
     if not genre:
         print("장르를 골라야 경로가 정해집니다.")
