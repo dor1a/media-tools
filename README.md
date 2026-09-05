@@ -107,12 +107,17 @@ pip install -r requirements.txt    # `uv pip install` where the venv has no pip
 python3 media.py                   # or: python3 -m music.cli "/path/to/staging"
 ```
 
+The folder is picked, not typed: it scans the working directory, `~/Downloads`
+and `~/Desktop` one level down and lists whatever holds audio, the same way
+the mkv side finds its folders. The library root defaults to
+`/Volumes/Media/Music`.
+
 Two ways in, since filing and converting are not always wanted together:
 
 | | |
 | --- | --- |
 | 라이브러리 편입 | convert, look up, move, tag |
-| 변환만 | convert and stop, for when the filing comes later |
+| 변환만 | convert and stop, for when the filing comes later. flac and anything already at 320 are left where they are |
 
 ## Format
 

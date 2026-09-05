@@ -158,6 +158,33 @@ def audio_files(path):
     return []
 
 
+# 스테이징이 실제로 놓이는 자리들. 여기와 그 바로 아래를 훑어 고르게 한다 --
+# 경로를 외워 치는 것보다 고르는 쪽이 빠르고, mkv 도구도 같은 방식이다.
+SCAN_ROOTS = ['.', '~/Downloads', '~/Desktop']
+
+
+def find_candidates(roots=None):
+    """음원이 든 폴더 후보. [(경로, 파일수)] — 중복은 없앤다."""
+    out, seen = [], set()
+    for root in (roots or SCAN_ROOTS):
+        base = Path(root).expanduser()
+        if not base.is_dir():
+            continue
+        for d in [base] + sorted(x for x in base.iterdir() if x.is_dir()):
+            real = str(d.resolve())
+            if real in seen:
+                continue
+            try:
+                n = sum(1 for f in d.iterdir()
+                        if f.is_file() and f.suffix.lower() in AUDIO_EXTS)
+            except OSError:
+                continue
+            if n:
+                seen.add(real)
+                out.append((d, n))
+    return out
+
+
 def guess_query(path):
     """`아티스트 - 곡` 파일명에서 검색어. 구분자가 없으면 이름 통째로."""
     stem = Path(path).stem

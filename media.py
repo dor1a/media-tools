@@ -17,7 +17,7 @@ import pathinput
 
 MEDIA = [
     ("영상  (mkv 트랙, 자막, TMDB 이름 정리)", 'video'),
-    ("음원  (iTunes 메타데이터로 라이브러리에 편입)", 'music'),
+    ("음원  (라이브러리 편입, 포맷 변환)", 'music'),
 ]
 
 

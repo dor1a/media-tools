@@ -21,13 +21,13 @@ from music import core
 GENRES = ['J-Pop', 'K-Pop', 'C-Pop', 'Pop', 'Anime', 'Game', 'Utaite', 'Melody']
 
 
-def pick(prompt, options, render, default=None):
+def pick(prompt, options, render, default=None, zero='건너뜀'):
     print()
     for i, o in enumerate(options, 1):
         mark = ' (기본)' if o == default else ''
         print(f"  {i}. {render(o)}{mark}")
     while True:
-        raw = input(f"{prompt} (0=건너뜀{', 엔터=기본' if default is not None else ''}): ").strip()
+        raw = input(f"{prompt} (0={zero}{', 엔터=기본' if default is not None else ''}): ").strip()
         if raw == '0':
             return None
         if not raw and default is not None:
@@ -35,6 +35,25 @@ def pick(prompt, options, render, default=None):
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return options[int(raw) - 1]
         print("  잘못된 입력입니다.")
+
+
+def ask_source():
+    """음원이 든 폴더를 고르게 한다. 못 찾으면 직접 입력."""
+    cands = core.find_candidates()
+    if cands:
+        labels = [f"{_short_path(d)}  ({n}개)" for d, n in cands]
+        choice = pick("\n📁 작업 폴더", labels, str, zero='경로 직접 입력')
+        if choice is not None:
+            return str(cands[labels.index(choice)][0])
+    return input("\n📁 폴더 또는 파일 경로: ").strip().strip('"')
+
+
+def _short_path(p):
+    home = Path.home()
+    try:
+        return '~/' + str(p.relative_to(home))
+    except ValueError:
+        return str(p)
 
 
 def ask_country():
@@ -90,8 +109,14 @@ def normalize(files, workdir):
 
     plans = [(f, *convert.verdict(f)) for f in files]
     todo = [p for p in plans if p[1] == 'encode']
+    keep = [p for p in plans if p[1] == 'keep']
+
+    if keep:
+        print(f"\n── 그대로 두는 것 {len(keep)}개 ──")
+        for f, _, why in keep:
+            print(f"  {f.name}  ({why})")
     if not todo:
-        print("  전부 라이브러리 포맷입니다. 변환 없음.")
+        print("\n변환할 것이 없습니다.")
         return files
 
     print(f"\n── 변환 {len(todo)}개 ──")
@@ -116,8 +141,8 @@ def normalize(files, workdir):
 
 
 ACTIONS = [
-    ("라이브러리 편입   (변환 → 검색 → 이동 → 태그)", 'organize'),
-    ("변환만            (mp3 320 으로 맞추기)", 'convert'),
+    ("라이브러리 편입   변환 → 검색 → 이동 → 태그", 'organize'),
+    ("변환만            mp3 320 으로 맞추기 (flac 과 이미 320 인 것은 그대로)", 'convert'),
 ]
 
 
@@ -134,7 +159,12 @@ def run_convert(files, workdir):
 
 def run_organize(files, workdir):
     """검색해서 라이브러리에 편입한다."""
-    base = Path(input("라이브러리 루트 (예: /Volumes/Media/Music): ").strip() or '.').expanduser()
+    default_base = '/Volumes/Media/Music'
+    raw_base = input(f"라이브러리 루트 (엔터 시 {default_base}): ").strip()
+    base = Path(raw_base or default_base).expanduser()
+    if not base.is_dir():
+        print(f"❌ 그런 폴더가 없습니다: {base}")
+        return 1
 
     genre = pick("장르 버킷", GENRES, str)
     if not genre:
@@ -188,8 +218,9 @@ def main(path_arg=None):
         return 0
     kind = kind[1]
 
-    raw = path_arg or (sys.argv[1] if len(sys.argv) > 1 else None) \
-        or input("\n폴더 또는 파일: ").strip()
+    raw = path_arg or (sys.argv[1] if len(sys.argv) > 1 else None) or ask_source()
+    if not raw:
+        return 1
     files = core.audio_files(raw)
     if not files:
         print("❌ 음원 파일이 없습니다.")
