@@ -114,8 +114,8 @@ prompt. The library root defaults to `/Volumes/Media/Music`.
 
 Only the chosen folder is read. Subfolders come along only if you say so, and
 the question is asked only when there is something down there — so the count
-beside each candidate is what you will actually get. `_converted/` is skipped,
-or a second run would re-encode its own output.
+beside each candidate is what you will actually get. Kept originals end in
+`.backup`, so a second run does not take them back in.
 
 Two ways in, since filing and converting are not always wanted together:
 
@@ -136,10 +136,13 @@ is brought to 320 with ffmpeg before it is filed.
 | mp3 below 320 | encoded to 320. This buys nothing in quality and is purely the convention |
 | wma, m4a, aac, ogg, opus, wav, aiff | encoded to 320 |
 
-Conversions land in `_converted/` beside the source and the original is
-kept, so a bad encode has somewhere to fall back to. Cover art and tags
-come across, which matters when the iTunes lookup finds nothing and the
-tagging step never runs.
+Conversion happens in place: the result takes the original name and the
+original steps aside as `<name>.<ext>.backup`, the same as the mkv side
+does after a remux. You are asked whether to keep it, and a file whose
+encode failed keeps its original either way.
+
+Cover art and tags come across, which matters when the iTunes lookup finds
+nothing and the tagging step never runs.
 
 Requires `ffmpeg`. Only this part needs it; nothing else in the repo does.
 

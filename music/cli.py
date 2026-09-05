@@ -120,7 +120,7 @@ def plan_album(files, base, country, genre, full_date):
     return moves
 
 
-def normalize(files, workdir):
+def normalize(files):
     """라이브러리 포맷(mp3 320, flac)으로 맞춘다. 무엇을 할지 먼저 보여준다."""
     from music import convert
 
@@ -139,9 +139,11 @@ def normalize(files, workdir):
     print(f"\n── 변환 {len(todo)}개 ──")
     for f, _, why in todo:
         print(f"  {f.name}\n    {why}")
-    print("  원본은 지우지 않습니다.")
     if input("\n변환할까? (엔터=예, n=취소): ").strip().lower() == 'n':
         return []
+
+    # 실패한 것의 원본은 어느 쪽을 골라도 남는다. 안 그러면 아무것도 안 남는다.
+    keep = input("원본은? (엔터=지움, k=.backup 으로 남김): ").strip().lower() == 'k'
 
     def report(src, action, why, err):
         if action == 'encode':
@@ -151,7 +153,7 @@ def normalize(files, workdir):
 
     print()
     try:
-        return convert.convert_all(files, workdir, on_each=report)
+        return convert.convert_all(files, on_each=report, keep_original=keep)
     except convert.FFmpegMissing as e:
         print(f"❌ {e}")
         return []
@@ -163,18 +165,12 @@ ACTIONS = [
 ]
 
 
-def run_convert(files, workdir):
+def run_convert(files):
     """포맷만 맞춘다. 정리는 나중에 하고 싶을 때."""
-    out = normalize(files, workdir)
-    if not out:
-        return 1
-    moved = [f for f in out if f.parent.name == '_converted']
-    if moved:
-        print(f"\n{len(moved)}개를 {workdir / '_converted'} 에 두었습니다.")
-    return 0
+    return 0 if normalize(files) else 1
 
 
-def run_organize(files, workdir):
+def run_organize(files):
     """검색해서 라이브러리에 편입한다."""
     default_base = '/Volumes/Media/Music'
     raw_base = input(f"라이브러리 루트 (엔터 시 {default_base}): ").strip()
@@ -193,7 +189,7 @@ def run_organize(files, workdir):
 
     print(f"\n파일 {len(files)}개")
 
-    files = normalize(files, workdir)
+    files = normalize(files)
     if not files:
         return 1
 
@@ -249,14 +245,9 @@ def main(path_arg=None):
         print("❌ 음원 파일이 없습니다.")
         return 1
 
-    # 파일 하나를 받았을 때 _converted 를 그 파일 아래 만들 수는 없다.
-    workdir = Path(raw).expanduser()
-    if workdir.is_file():
-        workdir = workdir.parent
-
     if kind == 'convert':
-        return run_convert(files, workdir)
-    return run_organize(files, workdir)
+        return run_convert(files)
+    return run_organize(files)
 
 
 if __name__ == '__main__':

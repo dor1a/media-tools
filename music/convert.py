@@ -2,6 +2,9 @@
 
 라이브러리는 mp3 320 이 기준이고 flac 은 그대로 둔다. flac 은 상위 포맷이라
 320 으로 내리는 것은 컨벤션을 위해 음질을 버리는 쪽이고, 되돌릴 수도 없다.
+
+변환은 제자리에서 한다. 결과가 원래 이름을 갖고 원본이 `.backup` 으로
+비켜나며, 이건 mkv 쪽 remux 와 같은 방식이다.
 """
 
 import json
@@ -11,7 +14,7 @@ from pathlib import Path
 
 TARGET_KBPS = 320
 KEEP_AS_IS = {'.flac'}
-CONVERTED_DIR = '_converted'
+BACKUP_SUFFIX = '.backup'
 
 
 class FFmpegMissing(RuntimeError):
@@ -60,47 +63,50 @@ def verdict(path):
     return 'encode', f'{ext[1:]} → mp3 {TARGET_KBPS}k'
 
 
-def to_mp3(src, dst):
-    """(ok, 에러문자열). 커버와 태그는 그대로 옮긴다.
+def to_mp3(src, keep_original=True):
+    """제자리에서 mp3 320 으로 바꾼다. (ok, 에러문자열).
 
-    옮긴 뒤 iTunes 값으로 다시 쓰기는 하지만, 검색이 실패해 태그 단계까지
-    못 갔을 때 원본 태그마저 사라지면 손해다.
+    결과가 원래 자리에 남고 원본이 비켜난다 — mkv 쪽 remux 와 같은 방식으로,
+    남긴 원본은 `<이름>.<원래확장자>.backup` 이 된다. 임시 파일로 먼저 뽑는
+    것은 mp3 를 mp3 로 바꿀 때 입력과 출력 경로가 같아서다.
+
+    커버와 태그는 그대로 옮긴다. 옮긴 뒤 iTunes 값으로 다시 쓰기는 하지만,
+    검색이 실패해 태그 단계까지 못 갔을 때 원본 태그마저 사라지면 손해다.
     """
-    dst = Path(dst)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
-        '-i', str(src),
-        '-map', '0', '-c:v', 'copy',           # 커버 아트
-        '-c:a', 'libmp3lame', '-b:a', f'{TARGET_KBPS}k',
-        '-map_metadata', '0', '-id3v2_version', '3',
-        str(dst),
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    src = Path(src)
+    dst = src.with_suffix('.mp3')
+    if dst.exists() and dst != src:
+        return False, f'{dst.name} 이 이미 있습니다'
+    tmp = src.parent / f"temp_{dst.name}"
+
+    base = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(src)]
+    tail = ['-c:a', 'libmp3lame', '-b:a', f'{TARGET_KBPS}k',
+            '-map_metadata', '0', '-id3v2_version', '3', str(tmp)]
+    r = subprocess.run(base + ['-map', '0', '-c:v', 'copy'] + tail,
+                       capture_output=True, text=True)
     if r.returncode != 0:
         # 커버가 없거나 스트림 구성이 달라 -map 0 이 실패하는 파일이 있다.
-        # 오디오만 다시 시도한다.
-        r = subprocess.run([
-            'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(src),
-            '-vn', '-c:a', 'libmp3lame', '-b:a', f'{TARGET_KBPS}k',
-            '-map_metadata', '0', '-id3v2_version', '3', str(dst),
-        ], capture_output=True, text=True)
+        r = subprocess.run(base + ['-vn'] + tail, capture_output=True, text=True)
     if r.returncode != 0:
-        if dst.exists():
-            dst.unlink()
+        if tmp.exists():
+            tmp.unlink()
         return False, (r.stderr.strip().splitlines() or ['ffmpeg 실패'])[-1]
+
+    if keep_original:
+        src.rename(src.with_suffix(src.suffix + '.backup'))
+    else:
+        src.unlink()
+    tmp.replace(dst)
     return True, None
 
 
-def convert_all(files, workdir, on_each=None):
-    """[Path] 를 라이브러리 포맷으로 맞춘 목록으로 바꾼다. 원본은 남긴다.
+def convert_all(files, on_each=None, keep_original=True):
+    """[Path] 를 라이브러리 포맷으로 맞춘 목록으로 바꾼다.
 
-    변환분은 `<workdir>/_converted/` 에 만든다. 원본을 지우지 않는 것은
-    변환이 잘못됐을 때 되돌릴 자리가 있어야 해서다.
+    실패한 파일의 원본은 어느 쪽을 골라도 그대로 남는다.
     """
     if not have_ffmpeg():
         raise FFmpegMissing('ffmpeg 와 ffprobe 가 필요합니다. brew install ffmpeg')
-    out_dir = Path(workdir) / CONVERTED_DIR
     result = []
     for f in files:
         action, why = verdict(f)
@@ -109,9 +115,8 @@ def convert_all(files, workdir, on_each=None):
             if on_each:
                 on_each(f, 'keep', why, None)
             continue
-        dst = out_dir / (Path(f).stem + '.mp3')
-        ok, err = to_mp3(f, dst)
-        result.append(dst if ok else Path(f))
+        ok, err = to_mp3(f, keep_original)
+        result.append(Path(f).with_suffix('.mp3') if ok else Path(f))
         if on_each:
             on_each(f, 'encode' if ok else 'fail', why, err)
     return result
