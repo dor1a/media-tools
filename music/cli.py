@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pathinput
 from music import core
 
-# 라이브러리 최상위 버킷. iTunes 의 장르로는 못 채운다 — Utaite·Melody 는
+# 라이브러리 최상위 버킷. iTunes 의 장르로는 못 채운다 — Utaite 와 Melody 는
 # 애플에 대응 장르가 없고, 같은 아티스트가 Anime 인지 J-Pop 인지도 사람 기준이다.
 GENRES = ['J-Pop', 'K-Pop', 'C-Pop', 'Pop', 'Anime', 'Game', 'Utaite', 'Melody']
 
@@ -84,12 +84,14 @@ def plan_album(files, base, country, genre, full_date):
     return moves
 
 
-def main():
+def main(path_arg=None):
+    """path_arg 는 media.py 가 자기 인자를 넘겨줄 때 쓴다."""
     pathinput.enable()
-    raw = sys.argv[1] if len(sys.argv) > 1 else input("정리할 폴더 또는 파일: ").strip()
+    raw = path_arg or (sys.argv[1] if len(sys.argv) > 1 else None) \
+        or input("정리할 폴더 또는 파일: ").strip()
     files = core.audio_files(raw)
     if not files:
-        print("❌ mp3 · flac 파일이 없습니다.")
+        print("❌ mp3 나 flac 파일이 없습니다.")
         return 1
 
     base = Path(input("라이브러리 루트 (예: /Volumes/Media/Music): ").strip() or '.').expanduser()

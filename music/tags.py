@@ -1,6 +1,6 @@
 """파일에 태그와 커버를 쓴다. mp3 는 ID3v2.4 + APEv2, flac 은 Vorbis comment.
 
-Pillow 를 쓰지 않는다. FLAC 그림 블록이 원하는 건 가로·세로 두 값뿐이고,
+Pillow 를 쓰지 않는다. FLAC 그림 블록이 원하는 건 가로와 세로 두 값뿐이고,
 그건 JPEG 헤더에서 바로 읽을 수 있다.
 """
 

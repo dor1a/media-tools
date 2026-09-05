@@ -4,8 +4,18 @@ Tools for keeping `/Volumes/Media` in the shape it is supposed to be in.
 They expect that library's naming rules, so they are of little use anywhere
 else.
 
-`mkvtool.py` is the way in. It asks for a folder once and every operation —
-tracks, subtitles, renaming — works on it from there.
+`media.py` is the way in. It asks which medium first, because the two sides
+want different things: video needs mkvtoolnix and collects mkv files, audio
+needs neither and reads mp3 and flac.
+
+```bash
+python3 media.py                 # 영상 or 음원
+python3 media.py "/path/here"    # the folder is handed to whichever you pick
+```
+
+Both sides still stand on their own — `python3 mkvtool.py`, `python3 -m
+music.cli` — and the video side keeps its own single-folder habit: it asks
+once and tracks, subtitles and renaming all work on that folder.
 
 ## mkvtool.py
 
@@ -90,8 +100,8 @@ Music/<장르>/<아티스트>/<타입>/[2021.01.06] <앨범>/03 - <곡>.flac
 ```
 
 ```bash
-pip install -r requirements.txt
-python3 -m music.cli "/path/to/staging"
+pip install -r requirements.txt    # `uv pip install` where the venv has no pip
+python3 media.py                   # or: python3 -m music.cli "/path/to/staging"
 ```
 
 It shows the whole plan and moves nothing until you say so. The destination

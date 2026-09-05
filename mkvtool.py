@@ -305,7 +305,8 @@ ACTIONS = [
 ]
 
 
-def main():
+def main(path_arg=None):
+    """path_arg 는 media.py 가 자기 인자를 넘겨줄 때 쓴다."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import pathinput
     pathinput.enable()
@@ -315,7 +316,7 @@ def main():
             print(f"❌ {tool} 이 없습니다. brew install mkvtoolnix")
             return
 
-    path, mkvs = ask_dir(sys.argv[1] if len(sys.argv) > 1 else None)
+    path, mkvs = ask_dir(path_arg or (sys.argv[1] if len(sys.argv) > 1 else None))
     if not mkvs:
         return
 
