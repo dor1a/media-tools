@@ -80,8 +80,53 @@ Seasons are found either way:
 `core.py` holds the lookups and the naming rules and knows nothing about
 either front end, which is why the CLI and the GUI cannot drift apart.
 
+## music
+
+Files a staging folder into the library from iTunes metadata, and tags them
+on the way in.
+
+```
+Music/<장르>/<아티스트>/<타입>/[2021.01.06] <앨범>/03 - <곡>.flac
+```
+
+```bash
+pip install -r requirements.txt
+python3 -m music.cli "/path/to/staging"
+```
+
+It shows the whole plan and moves nothing until you say so. The destination
+is `/Volumes/Media`, where a wrong move is not something you can undo.
+
+Two levels are yours to pick, because the metadata cannot supply them:
+
+- **장르** — the top bucket. Apple's genre does not map onto J-Pop / Utaite /
+  Melody, and whether an artist is Anime or J-Pop is a judgement about this
+  library rather than about the music
+- **타입** — proposed, then confirmable. `Indies` never gets proposed since no
+  external source knows about it
+
+The store matters: ask `jp` for J-Pop and `kr` for K-Pop, or the readings and
+release dates come back wrong.
+
+What the type proposal reads:
+
+| Result | From |
+| --- | --- |
+| Singles & EPs | iTunes appends ` - Single` / ` - EP` to the album title, or three tracks and under |
+| Live Albums | a live marker in the title |
+| Compilations | a best-of marker in the title |
+| (no folder) | Various Artists — soundtracks sit flat, as the library has them |
+| Albums | everything else |
+
+Album names keep their characters. Illegal ones take their full-width forms,
+the same as the renamer, rather than being dropped: the old script stripped
+anything non-alphanumeric and turned `Bird & Insect` into `Bird  Insect`.
+
+`core.py` holds the lookups and the path rules, `tags.py` writes ID3v2.4 +
+APEv2 + FLAC with cover art, and `cli.py` is the only part that asks
+questions. Eight scripts used to carry copies of the first two between them.
+
 ## Not here
 
-The music tooling (iTunes API, tagging) still lives in `~/Downloads`
-pending its own port. Windows packaging (pyinstaller, `.exe`) was dropped —
-nothing here runs on Windows any more.
+Windows packaging (pyinstaller, `.exe`) was dropped — nothing here runs on
+Windows any more.
