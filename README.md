@@ -189,6 +189,12 @@ Album names keep their characters. Illegal ones take their full-width forms,
 the same as the renamer, rather than being dropped: the old script stripped
 anything non-alphanumeric and turned `Bird & Insect` into `Bird  Insect`.
 
+A trailing `feat. …` gets wrapped in parentheses, because the library writes
+it that way — 159 of its 170 credits are `(feat. …)` and none are bare. What
+is already wrapped is left alone, including the square brackets Apple uses
+when the title itself has parentheses in it, and so is an `ft.` sitting in
+the middle of a title, which is a remix credit rather than a feature.
+
 `core.py` holds the lookups and the path rules, `tags.py` writes ID3v2.4 +
 APEv2 + FLAC with cover art, and `cli.py` is the only part that asks
 questions. Eight scripts used to carry copies of the first two between them.

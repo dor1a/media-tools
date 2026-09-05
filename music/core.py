@@ -1,6 +1,7 @@
 """iTunes 조회와 음원 라이브러리 경로 규칙. UI 없음 — cli.py 가 이 위에 얹힌다."""
 
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -150,10 +151,32 @@ def release_folder(album, full_date=True):
     return f"[{stamp}] {sanitize(album.get('collectionName') or '')}"
 
 
+# 맨 뒤에 붙은 참여 표기. `ft.` 는 넣지 않는다 — 라이브러리에서 그건 리믹스
+# 크레딧이 제목 중간에 든 경우였고(`… Neetz ft. Ryohu … Remix`) 감싸면 제목이
+# 망가진다.
+FEAT_RE = re.compile(r'\s+(feat\.|featuring)\s+(.+)$', re.I)
+WRAPPED_RE = re.compile(r'[(\[]\s*(feat\.|ft\.|featuring)', re.I)
+
+
+def wrap_feat(name):
+    """`제목 feat. X` → `제목 (feat. X)`. 이미 감싸져 있으면 그대로.
+
+    iTunes 는 맨몸으로 주고 라이브러리는 괄호로 쓴다 — 2026-09-05 실측에서
+    참여 표기 170건 중 159건이 `(feat.`, 맨몸은 0건이었다. 제목에 이미 괄호가
+    있으면 애플이 `[feat. …]` 로 주는데, 그건 이미 감싸진 것이라 통과한다.
+    """
+    if WRAPPED_RE.search(name):
+        return name
+    m = FEAT_RE.search(name)
+    if not m:
+        return name
+    return f"{name[:m.start()].rstrip()} ({m.group(1)} {m.group(2).strip()})"
+
+
 def track_file(track, ext):
     """`## - 곡명.ext` — 트랙번호는 두 자리."""
     no = str(track.get('trackNumber') or 1).zfill(2)
-    return f"{no} - {sanitize(track.get('trackName') or '')}{ext}"
+    return f"{no} - {sanitize(wrap_feat(track.get('trackName') or ''))}{ext}"
 
 
 def destination(base, genre, album, track, ext, full_date=True, type_folder=...):
