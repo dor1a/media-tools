@@ -38,14 +38,31 @@ def pick(prompt, options, render, default=None, zero='건너뜀'):
 
 
 def ask_source():
-    """음원이 든 폴더를 고르게 한다. 못 찾으면 직접 입력."""
+    """음원이 든 폴더를 고르게 한다.
+
+    번호와 경로를 같은 자리에서 받는다. tab 보완이 켜져 있어서 목록을 띄워두면
+    경로를 치는 쪽이 더 자연스럽고, 번호만 받으면 그게 오입력이 된다.
+    """
     cands = core.find_candidates()
-    if cands:
-        labels = [f"{_short_path(d)}  ({n}개)" for d, n in cands]
-        choice = pick("\n📁 작업 폴더", labels, str, zero='경로 직접 입력')
-        if choice is not None:
-            return str(cands[labels.index(choice)][0])
-    return input("\n📁 폴더 또는 파일 경로: ").strip().strip('"')
+    print()
+    for i, (d, n) in enumerate(cands, 1):
+        print(f"  {i}. {_short_path(d)}  ({n}개)")
+    if not cands:
+        print("  (가까운 곳에서 음원 폴더를 못 찾았습니다)")
+
+    while True:
+        raw = input("\n📁 번호 또는 경로 (0=취소): ").strip().strip('"')
+        if raw == '0':
+            return None
+        if raw.isdigit() and 1 <= int(raw) <= len(cands):
+            return str(cands[int(raw) - 1][0])
+        if raw:
+            path = Path(raw).expanduser()
+            if path.exists():
+                return str(path)
+            print(f"  그런 경로가 없습니다: {path}")
+        else:
+            print("  번호나 경로를 입력하세요.")
 
 
 def _short_path(p):

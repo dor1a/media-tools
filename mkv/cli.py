@@ -44,21 +44,26 @@ def short(name):
 def ask_dir(argv_path=None):
     path = argv_path
     if not path:
+        # 번호와 경로를 같은 자리에서 받는다. tab 보완이 켜져 있어 목록이
+        # 떠 있어도 경로를 치게 되고, 번호만 받으면 그게 오입력이 된다.
         cands = core.find_candidates()
-        if cands:
-            labels = [
-                f"{os.path.relpath(c) if c != os.getcwd() else '.'}"
-                f"  ({len(core.mkvs_in(c))}개)"
-                for c in cands
-            ]
-            choice = pick("\n📁 작업 폴더 (0=경로 직접 입력)", labels, allow_exit=True)
-            if choice is not None:
-                path = cands[labels.index(choice)]
-        if not path:
-            path = input("\n📁 작업 폴더 경로: ").strip().strip('"')
-    if not path:
-        print("❌ 경로가 필요합니다.")
-        return None, []
+        print()
+        for i, c in enumerate(cands, 1):
+            label = os.path.relpath(c) if c != os.getcwd() else '.'
+            print(f"  {i}. {label}  ({len(core.mkvs_in(c))}개)")
+        if not cands:
+            print("  (가까운 곳에서 mkv 폴더를 못 찾았습니다)")
+        while True:
+            raw = input("\n📁 번호 또는 경로 (0=취소): ").strip().strip('"')
+            if raw == '0':
+                return None, []
+            if raw.isdigit() and 1 <= int(raw) <= len(cands):
+                path = cands[int(raw) - 1]
+                break
+            if raw:
+                path = raw
+                break
+            print("  번호나 경로를 입력하세요.")
 
     path = os.path.abspath(os.path.expanduser(path))
     if not os.path.isdir(path):
