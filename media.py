@@ -43,8 +43,8 @@ def main():
         return 0
 
     if kind == 'video':
-        import mkvtool
-        return mkvtool.main(path_arg) or 0
+        from mkv import cli as mkv_cli
+        return mkv_cli.main(path_arg) or 0
 
     # 음원은 requests 와 mutagen 이 있어야 해서 고른 뒤에 늦게 import 한다.
     try:

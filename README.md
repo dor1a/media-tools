@@ -13,18 +13,18 @@ python3 media.py                 # 영상 or 음원
 python3 media.py "/path/here"    # the folder is handed to whichever you pick
 ```
 
-Both sides still stand on their own — `python3 mkvtool.py`, `python3 -m
+Both sides still stand on their own — `python3 -m mkv.cli`, `python3 -m
 music.cli` — and the video side keeps its own single-folder habit: it asks
 once and tracks, subtitles and renaming all work on that folder.
 
-## mkvtool.py
+## mkv
 
 Menu-driven mkv handling, built on mkvtoolnix. Replaces ten shell scripts
 that differed by a single `mkvmerge` flag each.
 
 ```bash
-python3 mkvtool.py "/path/to/folder"
-python3 mkvtool.py                      # lists the folders below you that hold mkv files
+python3 -m mkv.cli "/path/to/folder"
+python3 -m mkv.cli                      # lists the folders below you that hold mkv files
 ```
 
 The folder prompt has shell-style editing — arrows, delete, and tab
@@ -53,6 +53,9 @@ ids (`id0`, `id1`). Mixing them up removes the wrong track.
 Requires `mkvtoolnix`. The mkv menus have no Python dependencies; the renamer
 is imported only when you pick it, so `requests` is needed only then.
 
+`core.py` runs the tools and `cli.py` is the only part that prints or asks,
+the same split as the other two packages.
+
 ## renamer
 
 Renames episodes from TMDB metadata into
@@ -69,7 +72,7 @@ cp .env.example .env      # then put your TMDB key in it
 pip install -r requirements.txt
 ```
 
-Reachable from `mkvtool.py` as 이름 정리 (TMDB), which is usually what you
+Reachable from the mkv menu as 이름 정리 (TMDB), which is usually what you
 want since the folder is already chosen. It also stands on its own:
 
 ```bash
