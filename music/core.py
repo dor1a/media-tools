@@ -46,6 +46,25 @@ def _get(path, **params):
     return r.json().get('results', [])
 
 
+def as_album(track):
+    """곡 결과에서 앨범 부분만 뽑는다. 곡 결과가 앨범 정보를 다 들고 온다."""
+    return {
+        'collectionId': track.get('collectionId'),
+        'collectionName': track.get('collectionName', ''),
+        'artistName': track.get('collectionArtistName') or track.get('artistName', ''),
+        'releaseDate': track.get('releaseDate', ''),
+        'trackCount': track.get('trackCount'),
+        'primaryGenreName': track.get('primaryGenreName', ''),
+        'artworkUrl100': track.get('artworkUrl100', ''),
+    }
+
+
+def search_tracks(query, country='jp', limit=25):
+    """곡 검색 결과 그대로. 앨범 정보가 각 행에 함께 온다."""
+    return _get('/search', term=query, media='music', entity='song',
+                limit=limit, country=country)
+
+
 def search_albums(query, country='jp', limit=25):
     """곡으로 검색해서 그 곡이 실린 앨범들을 추린다.
 
@@ -53,21 +72,17 @@ def search_albums(query, country='jp', limit=25):
     이라서다. 곡으로 물어야 수록 앨범이 딸려 나온다.
     """
     seen = {}
-    for t in _get('/search', term=query, media='music', entity='song',
-                  limit=limit, country=country):
+    for t in search_tracks(query, country, limit):
         cid = t.get('collectionId')
-        if not cid or cid in seen:
-            continue
-        seen[cid] = {
-            'collectionId': cid,
-            'collectionName': t.get('collectionName', ''),
-            'artistName': t.get('collectionArtistName') or t.get('artistName', ''),
-            'releaseDate': t.get('releaseDate', ''),
-            'trackCount': t.get('trackCount'),
-            'primaryGenreName': t.get('primaryGenreName', ''),
-            'artworkUrl100': t.get('artworkUrl100', ''),
-        }
+        if cid and cid not in seen:
+            seen[cid] = as_album(t)
     return list(seen.values())
+
+
+def first_match(query, country='jp'):
+    """첫 검색 결과. 자동 모드가 쓰는 것 — 고르지 않고 맨 앞을 믿는다."""
+    rows = search_tracks(query, country, limit=1)
+    return rows[0] if rows else None
 
 
 def album_tracks(collection_id, country='jp'):

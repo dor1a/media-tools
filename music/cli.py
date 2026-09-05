@@ -160,8 +160,9 @@ def normalize(files):
 
 
 ACTIONS = [
-    ("라이브러리 편입   변환 → 검색 → 이동 → 태그", 'organize'),
-    ("변환만            mp3 320 으로 맞추기 (flac 과 이미 320 인 것은 그대로)", 'convert'),
+    ("편입 (직접 고르기)   곡마다 앨범과 트랙을 고른다", 'organize'),
+    ("편입 (자동)          첫 검색 결과로 잡고 계획에서 뺄 것만 고른다", 'auto'),
+    ("변환만               mp3 320 으로 맞추기 (flac 과 이미 320 인 것은 그대로)", 'convert'),
 ]
 
 
@@ -170,37 +171,41 @@ def run_convert(files):
     return 0 if normalize(files) else 1
 
 
-def run_organize(files):
-    """검색해서 라이브러리에 편입한다."""
+def ask_common():
+    """편입에 필요한 것들. (base, genre, full_date, country) 또는 None."""
     default_base = '/Volumes/Media/Music'
     raw_base = input(f"라이브러리 루트 (엔터 시 {default_base}): ").strip()
     base = Path(raw_base or default_base).expanduser()
     if not base.is_dir():
         print(f"❌ 그런 폴더가 없습니다: {base}")
-        return 1
+        return None
 
     genre = pick("장르 버킷", GENRES, str)
     if not genre:
         print("장르를 골라야 경로가 정해집니다.")
-        return 1
+        return None
 
     full_date = input("발매일을 YYYY.MM.DD 로 쓸까? (엔터=예, n=연도만): ").strip().lower() != 'n'
-    country = ask_country() or 'jp'
+    return base, genre, full_date, ask_country() or 'jp'
 
-    print(f"\n파일 {len(files)}개")
 
-    files = normalize(files)
-    if not files:
-        return 1
-
-    moves = plan_album(files, base, country, genre, full_date)
-    if not moves:
-        print("\n옮길 것이 없습니다.")
-        return 0
-
+def confirm_and_apply(moves):
+    """계획을 보여주고, 뺄 것을 받고, 옮긴다."""
     print("\n── 계획 ──")
-    for m in moves:
-        print(f"  {m.src.name}\n    → {m.dst}")
+    for i, m in enumerate(moves, 1):
+        print(f"  {i}. {m.src.name}\n     → {m.dst}")
+
+    raw = input("\n뺄 번호 (쉼표로, 없으면 엔터): ").strip()
+    if raw:
+        try:
+            drop = {int(x) for x in raw.replace(' ', '').split(',') if x}
+        except ValueError:
+            print("숫자를 쉼표로 넣으세요. 취소합니다.")
+            return 0
+        moves = [m for i, m in enumerate(moves, 1) if i not in drop]
+    if not moves:
+        print("남은 것이 없습니다.")
+        return 0
 
     if input(f"\n{len(moves)}개를 옮기고 태그를 쓸까? (y): ").strip().lower() != 'y':
         print("취소했습니다. 파일은 그대로입니다.")
@@ -220,6 +225,58 @@ def run_organize(files):
             ok += 1
     print(f"\n완료 {ok}/{len(moves)}")
     return 0
+
+
+def run_organize(files):
+    """앨범과 트랙을 직접 고른다."""
+    common = ask_common()
+    if not common:
+        return 1
+    base, genre, full_date, country = common
+
+    print(f"\n파일 {len(files)}개")
+    files = normalize(files)
+    if not files:
+        return 1
+
+    moves = plan_album(files, base, country, genre, full_date)
+    if not moves:
+        print("\n옮길 것이 없습니다.")
+        return 0
+    return confirm_and_apply(moves)
+
+
+def run_auto(files):
+    """묻지 않고 첫 검색 결과로 잡는다. 계획을 보고 뺄 것만 고른다."""
+    common = ask_common()
+    if not common:
+        return 1
+    base, genre, full_date, country = common
+
+    print(f"\n파일 {len(files)}개")
+    files = normalize(files)
+    if not files:
+        return 1
+
+    print("\n검색 중...")
+    moves, misses = [], []
+    for f in files:
+        hit = core.first_match(core.guess_query(f), country)
+        if not hit:
+            misses.append(f)
+            continue
+        album = core.as_album(hit)
+        moves.append(core.Move(
+            f, core.destination(base, genre, album, hit, f.suffix, full_date=full_date), hit))
+
+    if misses:
+        print(f"\n검색 결과 없음 {len(misses)}개 (그대로 둡니다):")
+        for f in misses:
+            print(f"  {f.name}")
+    if not moves:
+        print("\n옮길 것이 없습니다.")
+        return 0
+    return confirm_and_apply(moves)
 
 
 def main(path_arg=None):
@@ -247,6 +304,8 @@ def main(path_arg=None):
 
     if kind == 'convert':
         return run_convert(files)
+    if kind == 'auto':
+        return run_auto(files)
     return run_organize(files)
 
 

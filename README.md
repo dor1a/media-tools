@@ -117,12 +117,17 @@ the question is asked only when there is something down there — so the count
 beside each candidate is what you will actually get. Kept originals end in
 `.backup`, so a second run does not take them back in.
 
-Two ways in, since filing and converting are not always wanted together:
+Three ways in, since filing and converting are not always wanted together:
 
 | | |
 | --- | --- |
-| 라이브러리 편입 | convert, look up, move, tag |
+| 편입 (직접 고르기) | you pick the album and the track for each file |
+| 편입 (자동) | the first search hit is taken for every file. The plan is shown and you drop the wrong ones by number |
 | 변환만 | convert and stop, for when the filing comes later. flac and anything already at 320 are left where they are |
+
+Picking per track is fine for one album and unreasonable for forty files.
+The automatic run is the same pipeline with the choosing removed, and
+nothing moves until you have read the plan either way.
 
 ## Format
 
