@@ -24,8 +24,9 @@ GENRES = ['J-Pop', 'K-Pop', 'C-Pop', 'Pop', 'Anime', 'Game', 'Utaite', 'Melody']
 def pick(prompt, options, render, default=None, zero='건너뜀'):
     print()
     for i, o in enumerate(options, 1):
-        mark = ' (기본)' if o == default else ''
-        print(f"  {i}. {render(o)}{mark}")
+        # 기본값 표시는 줄 앞에 둔다. 뒤에 붙이면 `feat.` 이 달린 긴 곡명과
+        # 이어져 읽혀서 제목의 일부처럼 보인다.
+        print(f"{'*' if o == default else ' '}{i}. {render(o)}")
     while True:
         raw = input(f"{prompt} (0={zero}{', 엔터=기본' if default is not None else ''}): ").strip()
         if raw == '0':
@@ -76,9 +77,9 @@ def _short_path(p):
         return str(p)
 
 
-def ask_country():
-    print("\n스토어를 고른다. 같은 앨범도 스토어마다 표기와 발매일이 다르다.")
-    return pick("국가", core.COUNTRY_CODES, str, default='jp')
+def ask_country(current=None):
+    print("\n어느 나라 스토어에서 찾을까? 같은 앨범이라도 스토어마다 표기랑 발매일이 달라.")
+    return pick("스토어", core.COUNTRY_CODES, str, default=current or 'jp')
 
 
 def _norm(text):
@@ -98,30 +99,44 @@ def best_track(tracks, filename):
 
 
 def choose_album(f, country):
-    """파일 하나로 검색해 앨범과 타입, 수록곡을 정한다. (album, kind, tracks)."""
+    """파일 하나로 검색해 앨범과 타입, 수록곡을 정한다.
+
+    (album, kind, tracks, country) — 스토어를 바꿨으면 바뀐 값이 돌아온다.
+    한 폴더에 일본 곡과 한국 곡이 섞이는 게 보통이라, 스토어는 실행 단위가
+    아니라 앨범 단위로 정해질 수 있어야 한다.
+    """
     query = core.guess_query(f)
     print(f"\n🔍 검색어: {query}")
-    albums = core.search_albums(query, country)
-    if not albums:
-        print("  검색 결과가 없습니다.")
-        return None, None, None
 
-    album = pick(
-        "앨범", albums,
-        lambda a: f"[{(a['releaseDate'] or '')[:10]}] {a['collectionName']} / {a['artistName']}"
-                  f"  ({a.get('trackCount') or '?'}곡)",
-    )
-    if not album:
-        return None, None, None
+    while True:
+        albums = core.search_albums(query, country)
+        if albums:
+            print()
+            for i, a in enumerate(albums, 1):
+                print(f" {i}. [{(a['releaseDate'] or '')[:10]}] {a['collectionName']}"
+                      f" / {a['artistName']}  ({a.get('trackCount') or '?'}곡)")
+        else:
+            print(f"\n  {country} 스토어에는 없어.")
+
+        raw = input(f"앨범 (0=건너뜀, s=스토어 바꾸기, 지금 {country}): ").strip().lower()
+        if raw == '0':
+            return None, None, None, country
+        if raw == 's':
+            country = ask_country(country) or country
+            continue
+        if raw.isdigit() and 1 <= int(raw) <= len(albums):
+            album = albums[int(raw) - 1]
+            break
+        print("  번호나 s 를 입력해.")
 
     suggested = core.album_type(album)
-    print(f"\n  제안된 타입: {suggested or '(타입 폴더 없음 — Various Artists)'}")
-    if input("  그대로 쓸까? (엔터=예, n=고르기): ").strip().lower() == 'n':
+    print(f"\n  타입은 {suggested or 'Various Artists 라 폴더 없이'} 로 볼게.")
+    if input("  그대로 쓸까? (엔터=응, n=고르기): ").strip().lower() == 'n':
         kind = pick("타입", core.TYPES, str)
     else:
         kind = suggested
 
-    return album, kind, core.album_tracks(album['collectionId'], country)
+    return album, kind, core.album_tracks(album['collectionId'], country), country
 
 
 def plan_moves(files, base, country, genre, full_date):
@@ -133,7 +148,7 @@ def plan_moves(files, base, country, genre, full_date):
 
     for f in files:
         if not reuse:
-            album, kind, tracks = choose_album(f, country)
+            album, kind, tracks, country = choose_album(f, country)
             if album is None:
                 print(f"  건너뜀: {f.name}")
                 continue

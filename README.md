@@ -164,8 +164,10 @@ Two levels are yours to pick, because the metadata cannot supply them:
 - **타입** — proposed, then confirmable. `Indies` never gets proposed since no
   external source knows about it
 
-The store matters: ask `jp` for J-Pop and `kr` for K-Pop, or the readings and
-release dates come back wrong.
+The store matters: `jp` for J-Pop, `kr` for K-Pop, or the readings and release
+dates come back wrong. It is per album rather than per run, since a folder
+holding both is the normal case — `s` at the album prompt searches again
+somewhere else, and the choice carries to the next file.
 
 What the type proposal reads:
 
