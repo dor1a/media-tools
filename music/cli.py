@@ -239,6 +239,12 @@ def main(path_arg=None):
     if not raw:
         return 1
     files = core.audio_files(raw)
+    deep = core.audio_files(raw, recursive=True)
+    if len(deep) > len(files):
+        extra = len(deep) - len(files)
+        print(f"\n하위 폴더에 {extra}개가 더 있습니다.")
+        if input("포함할까? (엔터=이 폴더만, y=하위까지): ").strip().lower() == 'y':
+            files = deep
     if not files:
         print("❌ 음원 파일이 없습니다.")
         return 1

@@ -109,8 +109,13 @@ python3 media.py                   # or: python3 -m music.cli "/path/to/staging"
 
 The folder is picked, not typed: it scans the working directory, `~/Downloads`
 and `~/Desktop` one level down and lists whatever holds audio, the same way
-the mkv side finds its folders. The library root defaults to
-`/Volumes/Media/Music`.
+the mkv side finds its folders. A number or a path is accepted at that
+prompt. The library root defaults to `/Volumes/Media/Music`.
+
+Only the chosen folder is read. Subfolders come along only if you say so, and
+the question is asked only when there is something down there — so the count
+beside each candidate is what you will actually get. `_converted/` is skipped,
+or a second run would re-encode its own output.
 
 Two ways in, since filing and converting are not always wanted together:
 

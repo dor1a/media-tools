@@ -7,6 +7,8 @@ from pathlib import Path
 
 import requests
 
+from music.convert import CONVERTED_DIR
+
 ITUNES_BASE = "https://itunes.apple.com"
 # 라이브러리에 들어가는 확장자는 mp3 와 flac 둘뿐이지만, 받아들이는 입력은
 # 그보다 넓다. 나머지는 convert 가 mp3 320 으로 맞춘다.
@@ -149,13 +151,23 @@ def destination(base, genre, album, track, ext, full_date=True, type_folder=...)
 
 # --- 파일 --------------------------------------------------------------------
 
-def audio_files(path):
+def audio_files(path, recursive=False):
+    """기본은 그 폴더 바로 아래만. 하위까지 훑으려면 recursive.
+
+    변환분을 두는 `_converted` 는 훑을 때 뺀다. 두 번째 실행에서 자기가
+    만든 결과를 다시 입력으로 잡으면 인코딩이 한 겹 더 쌓인다.
+    """
     p = Path(path).expanduser()
     if p.is_file() and p.suffix.lower() in AUDIO_EXTS:
         return [p]
-    if p.is_dir():
-        return sorted(f for f in p.rglob('*') if f.suffix.lower() in AUDIO_EXTS)
-    return []
+    if not p.is_dir():
+        return []
+    it = p.rglob('*') if recursive else p.iterdir()
+    return sorted(
+        f for f in it
+        if f.is_file() and f.suffix.lower() in AUDIO_EXTS
+        and CONVERTED_DIR not in f.parts
+    )
 
 
 # 스테이징이 실제로 놓이는 자리들. 여기와 그 바로 아래를 훑어 고르게 한다 --
