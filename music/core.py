@@ -232,8 +232,8 @@ class Move:
 def apply(moves, tagger=None):
     """계획을 실제로 반영. [(Move, None|에러문자열), ...] 반환.
 
-    계획과 적용을 나눈 것은 목적지가 `/Volumes/Media` 이기 때문이다. 옮기고
-    나서야 틀린 걸 알면 되돌릴 방법이 없다.
+    계획과 적용을 나눈 것은 목적지가 라이브러리이기 때문이다. 옮기고 나서야
+    틀린 걸 알면 되돌릴 방법이 없다.
     """
     results = []
     for m in moves:

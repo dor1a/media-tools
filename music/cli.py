@@ -3,8 +3,8 @@
 
     python3 -m music.cli [폴더]
 
-파일을 옮기기 전에 계획을 통째로 보여준다. 목적지가 /Volumes/Media 라
-되돌리기가 어렵다.
+파일을 옮기기 전에 계획을 통째로 보여준다. 목적지가 라이브러리라 되돌리기가
+어렵다.
 """
 
 import os
@@ -50,10 +50,13 @@ def ask_source():
     if not cands:
         print("  (가까운 곳에서 음원 폴더를 못 찾았습니다)")
 
+    hint = ', 엔터=1' if cands else ''
     while True:
-        raw = input("\n📁 번호 또는 경로 (0=취소): ").strip().strip('"')
+        raw = input(f"\n📁 번호 또는 경로 (0=취소{hint}): ").strip().strip('"')
         if raw == '0':
             return None
+        if not raw and cands:
+            return str(cands[0][0])
         if raw.isdigit() and 1 <= int(raw) <= len(cands):
             return str(cands[int(raw) - 1][0])
         if raw:
@@ -211,11 +214,14 @@ def run_convert(files):
     return 0 if normalize(files) else 1
 
 
-def ask_common():
-    """편입에 필요한 것들. (base, genre, full_date, country) 또는 None."""
-    default_base = '/Volumes/Media/Music'
-    raw_base = input(f"라이브러리 루트 (엔터 시 {default_base}): ").strip()
-    base = Path(raw_base or default_base).expanduser()
+def ask_common(default_base):
+    """편입에 필요한 것들. (base, genre, full_date, country) 또는 None.
+
+    기본값은 소스 폴더다. 라이브러리 경로는 머신마다 다르고(맥은 마운트,
+    서버는 로컬), 원본 옆에 트리를 세워두면 나중에 통째로 옮기면 된다.
+    """
+    raw_base = input(f"\n라이브러리 루트 (엔터 시 {_short_path(default_base)}): ").strip()
+    base = Path(raw_base).expanduser() if raw_base else Path(default_base)
     if not base.is_dir():
         print(f"❌ 그런 폴더가 없습니다: {base}")
         return None
@@ -267,9 +273,9 @@ def confirm_and_apply(moves):
     return 0
 
 
-def run_organize(files):
+def run_organize(files, source):
     """앨범과 트랙을 직접 고른다."""
-    common = ask_common()
+    common = ask_common(source)
     if not common:
         return 1
     base, genre, full_date, country = common
@@ -286,9 +292,9 @@ def run_organize(files):
     return confirm_and_apply(moves)
 
 
-def run_auto(files):
+def run_auto(files, source):
     """묻지 않고 첫 검색 결과로 잡는다. 계획을 보고 뺄 것만 고른다."""
-    common = ask_common()
+    common = ask_common(source)
     if not common:
         return 1
     base, genre, full_date, country = common
@@ -342,11 +348,15 @@ def main(path_arg=None):
         print("❌ 음원 파일이 없습니다.")
         return 1
 
+    source = Path(raw).expanduser()
+    if source.is_file():
+        source = source.parent
+
     if kind == 'convert':
         return run_convert(files)
     if kind == 'auto':
-        return run_auto(files)
-    return run_organize(files)
+        return run_auto(files, source)
+    return run_organize(files, source)
 
 
 if __name__ == '__main__':

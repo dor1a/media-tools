@@ -110,7 +110,9 @@ python3 media.py                   # or: python3 -m music.cli "/path/to/staging"
 The folder is picked, not typed: it scans the working directory, `~/Downloads`
 and `~/Desktop` one level down and lists whatever holds audio, the same way
 the mkv side finds its folders. A number or a path is accepted at that
-prompt. The library root defaults to `/Volumes/Media/Music`.
+prompt. The library root defaults to the folder the files came from, so the
+tree is built beside them and moved into the library later — the library's
+path is not the same on every machine.
 
 Only the chosen folder is read. Subfolders come along only if you say so, and
 the question is asked only when there is something down there — so the count
@@ -151,8 +153,8 @@ nothing and the tagging step never runs.
 
 Requires `ffmpeg`. Only this part needs it; nothing else in the repo does.
 
-It shows the whole plan and moves nothing until you say so. The destination
-is `/Volumes/Media`, where a wrong move is not something you can undo.
+It shows the whole plan and moves nothing until you say so — a wrong move
+into the library is not something you can undo.
 
 Two levels are yours to pick, because the metadata cannot supply them:
 
