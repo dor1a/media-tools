@@ -109,7 +109,12 @@ def ask_country(current=None):
 
 
 def _norm(text):
-    """비교용으로 문자를 줄인다 — 공백과 기호를 빼고 소문자로."""
+    """비교용으로 문자를 줄인다 — NFC 로 합치고, 공백과 기호를 빼고 소문자로.
+
+    NFC 가 먼저다. 파일명은 NFD 로 저장돼서 `리` 가 `ㄹ`+`ㅣ` 로, `ン` 이
+    `ン`+탁점으로 쪼개져 있고, 그대로 비교하면 같은 이름이 안 맞는다.
+    """
+    text = unicodedata.normalize('NFC', text)
     return ''.join(c for c in text.lower() if c.isalnum())
 
 
@@ -119,7 +124,7 @@ def best_track(tracks, filename):
     고를 것을 없애지는 않고 기본값만 준다 — 잘못 맞췄을 때 엔터 한 번으로
     엉뚱한 트랙이 되면 안 된다.
     """
-    stem = _norm(Path(filename).stem)
+    stem = _norm(core.stem_nfc(filename))
     hits = [t for t in tracks if t.get('trackName') and _norm(t['trackName']) in stem]
     return max(hits, key=lambda t: len(_norm(t['trackName']))) if hits else None
 

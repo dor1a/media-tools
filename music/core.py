@@ -2,6 +2,7 @@
 
 import os
 import re
+import unicodedata
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -192,7 +193,7 @@ def artist_folder(album, source=None):
     if itunes.lower() == VARIOUS:
         return itunes
     if source:
-        head, sep, _ = Path(source).stem.partition(' - ')
+        head, sep, _ = stem_nfc(source).partition(' - ')
         if sep and head.strip():
             return head.strip()
     return itunes
@@ -258,9 +259,18 @@ def find_candidates(roots=None):
     return out
 
 
+def stem_nfc(path):
+    """파일 이름(확장자 제외)을 NFC 로. macOS 는 파일명을 NFD 로 저장한다.
+
+    `ン` 이 `ン` + 탁점으로, 한글은 자모로 쪼개져 저장되므로, iTunes 가 주는
+    NFC 문자열과 그대로 비교하면 눈에 같아 보이는 이름이 안 맞는다.
+    """
+    return unicodedata.normalize('NFC', Path(path).stem)
+
+
 def guess_query(path):
     """`아티스트 - 곡` 파일명에서 검색어. 구분자가 없으면 이름 통째로."""
-    stem = Path(path).stem
+    stem = stem_nfc(path)
     artist, sep, title = stem.partition(' - ')
     return f"{artist.strip()} {title.strip()}" if sep else stem.strip()
 
