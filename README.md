@@ -177,6 +177,14 @@ Two levels are yours to pick, because the metadata cannot supply them:
 - **타입** — proposed, then confirmable. `Indies` never gets proposed since no
   external source knows about it
 
+The artist folder comes from the file name when it is written
+`아티스트 - 곡`, not from the search. The store decides how a name is spelled
+— asking jp for a Korean song returns `Wheesung` where the library has
+`휘성`, and its K-Pop folders are all in Korean. The file name already
+carries the spelling you chose. Compilations are the exception: there the
+name in the file is the track's artist, not the album's, so Various Artists
+stands.
+
 The store matters: the same album comes back with different readings and
 release dates depending on where you ask. It is chosen per album rather than
 per run, since a folder holding both Japanese and Korean songs is the normal

@@ -171,7 +171,7 @@ def plan_moves(files, base, country, genre, full_date):
         moves.append(core.Move(
             f,
             core.destination(base, genre, album, track, f.suffix,
-                             full_date=full_date, type_folder=kind),
+                             full_date=full_date, type_folder=kind, source=f),
             track,
         ))
 
@@ -352,7 +352,8 @@ def run_auto(files, source):
             continue
         album = core.as_album(hit)
         moves.append(core.Move(
-            f, core.destination(base, genre, album, hit, f.suffix, full_date=full_date), hit))
+            f, core.destination(base, genre, album, hit, f.suffix,
+                               full_date=full_date, source=f), hit))
 
     if misses:
         print(f"\n검색 결과 없음 {len(misses)}개 (그대로 둡니다):")

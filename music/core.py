@@ -179,14 +179,33 @@ def track_file(track, ext):
     return f"{no} - {sanitize(wrap_feat(track.get('trackName') or ''))}{ext}"
 
 
-def destination(base, genre, album, track, ext, full_date=True, type_folder=...):
+def artist_folder(album, source=None):
+    """아티스트 폴더 이름. 파일명이 `아티스트 - 곡` 이면 그쪽을 쓴다.
+
+    스토어가 이름 표기까지 정해버리기 때문이다 — kr 검색이 비어 있어 한국 곡을
+    jp 에서 찾으면 `휘성` 이 `Wheesung` 으로 온다. 라이브러리는 원어 표기이고
+    (K-Pop 폴더가 전부 한글이다) 파일명이 이미 그걸 담고 있다.
+
+    컴필레이션은 예외다. 파일명의 이름은 곡 아티스트라 앨범 아티스트가 아니다.
+    """
+    itunes = (album.get('artistName') or '').strip()
+    if itunes.lower() == VARIOUS:
+        return itunes
+    if source:
+        head, sep, _ = Path(source).stem.partition(' - ')
+        if sep and head.strip():
+            return head.strip()
+    return itunes
+
+
+def destination(base, genre, album, track, ext, full_date=True, type_folder=..., source=None):
     """`<base>/<장르>/<아티스트>/<타입>/[날짜] <앨범>/## - <곡>.ext`
 
     장르는 부르는 쪽이 준다. iTunes 의 `primaryGenreName` 은 이 라이브러리의
     버킷(J-Pop / Utaite / Melody …)과 대응하지 않아서 자동으로 못 채운다.
     """
     kind = album_type(album) if type_folder is ... else type_folder
-    parts = [str(base), sanitize(genre), sanitize(album.get('artistName') or '')]
+    parts = [str(base), sanitize(genre), sanitize(artist_folder(album, source))]
     if kind:
         parts.append(kind)
     parts += [release_folder(album, full_date), track_file(track, ext)]
