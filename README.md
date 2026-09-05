@@ -164,10 +164,16 @@ Two levels are yours to pick, because the metadata cannot supply them:
 - **타입** — proposed, then confirmable. `Indies` never gets proposed since no
   external source knows about it
 
-The store matters: `jp` for J-Pop, `kr` for K-Pop, or the readings and release
-dates come back wrong. It is per album rather than per run, since a folder
-holding both is the normal case — `s` at the album prompt searches again
-somewhere else, and the choice carries to the next file.
+The store matters: the same album comes back with different readings and
+release dates depending on where you ask. It is chosen per album rather than
+per run, since a folder holding both Japanese and Korean songs is the normal
+case — `s` at the album prompt searches again somewhere else, and the choice
+carries to the next file.
+
+`kr` is a trap worth knowing: Korea has Apple Music but no iTunes Store, so
+its search catalogue is empty and every query returns nothing. The songs are
+there — looking one up by id works — but they have to be found through `jp`
+or `us`, where a Korean artist may be spelled in Latin.
 
 What the type proposal reads:
 

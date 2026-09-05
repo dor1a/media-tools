@@ -33,6 +33,14 @@ BEST_MARKERS = ('best', 'greatest hits', 'complete', 'collection', 'anthology', 
 
 VARIOUS = 'various artists'
 
+# iTunes Store 가 음원을 팔지 않는 나라는 Search 카탈로그가 비어 있다. 곡이 없는
+# 게 아니라 검색만 0건이라(같은 곡을 lookup 하면 정상으로 나온다) "그 스토어에
+# 없다"로 읽고 포기하기 쉽다. kr 은 2026-09-05 실측 — `BTS`·`아이유`·`Wheesung`
+# 어느 것으로도 0건이었다.
+EMPTY_SEARCH_STORES = {
+    'kr': '한국은 iTunes 음원을 안 팔아서 검색 카탈로그가 비어 있어. jp 나 us 로 찾아봐.',
+}
+
 
 class ITunesError(RuntimeError):
     pass

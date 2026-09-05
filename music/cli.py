@@ -117,6 +117,9 @@ def choose_album(f, country):
                       f" / {a['artistName']}  ({a.get('trackCount') or '?'}곡)")
         else:
             print(f"\n  {country} 스토어에는 없어.")
+            note = core.EMPTY_SEARCH_STORES.get(country)
+            if note:
+                print(f"  {note}")
 
         raw = input(f"앨범 (0=건너뜀, s=스토어 바꾸기, 지금 {country}): ").strip().lower()
         if raw == '0':
