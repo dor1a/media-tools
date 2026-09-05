@@ -125,7 +125,16 @@ Three ways in, since filing and converting are not always wanted together:
 | --- | --- |
 | 편입 (직접 고르기) | you pick the album and the track for each file |
 | 편입 (자동) | the first search hit is taken for every file. The plan is shown and you drop the wrong ones by number |
-| 변환만 | convert and stop, for when the filing comes later. flac and anything already at 320 are left where they are |
+| 변환만 | brings files to mp3 320. flac and anything already at 320 are left where they are |
+
+Filing never converts. It lists what each file is — `mp3 320k`, `flac`,
+`mp3 239k` — and says so if something is not in the library's format, but
+changing it is a separate run you ask for.
+
+The order follows from that: the library root and the date format come
+first, then the listing, and only then the genre and the store. Both of
+those are judgements about the files, and they are easier to make once you
+have seen the names.
 
 Picking per track is fine for one album and unreasonable for forty files.
 The automatic run is the same pipeline with the choosing removed, and

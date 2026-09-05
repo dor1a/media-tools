@@ -45,6 +45,20 @@ def bitrate_kbps(path):
     return None
 
 
+def state(path):
+    """(표시할 상태, 라이브러리 포맷인가). 바꾸지 않고 알려만 준다."""
+    path = Path(path)
+    ext = path.suffix.lower()
+    if ext in KEEP_AS_IS:
+        return ext[1:], True
+    if ext == '.mp3':
+        kbps = bitrate_kbps(path)
+        if kbps is None:
+            return 'mp3 (비트레이트 못 읽음)', False
+        return f'mp3 {kbps}k', kbps >= TARGET_KBPS
+    return ext[1:], False
+
+
 def verdict(path):
     """('keep'|'encode', 사유). 실제로 무엇을 할지 미리 보여주려고 나눠 뒀다."""
     path = Path(path)

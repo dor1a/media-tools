@@ -230,16 +230,33 @@ ACTIONS = [
 ]
 
 
+def describe(files):
+    """파일마다 지금 포맷을 적어준다. 바꾸지는 않는다 — 변환은 별도 메뉴다."""
+    from music import convert
+
+    print(f"\n── 파일 {len(files)}개 ──")
+    off = 0
+    for f in files:
+        label, ok = convert.state(f)
+        if not ok:
+            off += 1
+        print(f"  {f.name}\n    {label}{'' if ok else '   <- mp3 320 아님'}")
+    if off:
+        print(f"\n  {off}개가 라이브러리 포맷이 아니야. 바꾸려면 메뉴의 '변환만' 을 먼저 돌려.")
+
+
 def run_convert(files):
     """포맷만 맞춘다. 정리는 나중에 하고 싶을 때."""
     return 0 if normalize(files) else 1
 
 
 def ask_common(default_base):
-    """편입에 필요한 것들. (base, genre, full_date, country) 또는 None.
+    """파일을 보기 전에 정할 수 있는 것들. (base, full_date) 또는 None.
 
     기본값은 소스 폴더다. 라이브러리 경로는 머신마다 다르고(맥은 마운트,
     서버는 로컬), 원본 옆에 트리를 세워두면 나중에 통째로 옮기면 된다.
+
+    장르와 스토어는 여기서 안 묻는다 — 파일 목록을 보고 정할 것들이다.
     """
     raw_base = input(f"\n라이브러리 루트 (엔터 시 {_short_path(default_base)}): ").strip()
     base = Path(raw_base).expanduser() if raw_base else Path(default_base)
@@ -247,13 +264,8 @@ def ask_common(default_base):
         print(f"❌ 그런 폴더가 없습니다: {base}")
         return None
 
-    genre = pick("장르 버킷", GENRES, str)
-    if not genre:
-        print("장르를 골라야 경로가 정해집니다.")
-        return None
-
     full_date = input("발매일을 YYYY.MM.DD 로 쓸까? (엔터=예, n=연도만): ").strip().lower() != 'n'
-    return base, genre, full_date, ask_country() or 'jp'
+    return base, full_date
 
 
 def confirm_and_apply(moves):
@@ -301,12 +313,14 @@ def run_organize(files, source):
     common = ask_common(source)
     if not common:
         return 1
-    base, genre, full_date, country = common
+    base, full_date = common
 
-    print(f"\n파일 {len(files)}개")
-    files = normalize(files)
-    if not files:
+    describe(files)
+    genre = pick("장르 버킷", GENRES, str)
+    if not genre:
+        print("장르를 골라야 경로가 정해집니다.")
         return 1
+    country = ask_country() or 'jp'
 
     moves = plan_moves(files, base, country, genre, full_date)
     if not moves:
@@ -320,12 +334,14 @@ def run_auto(files, source):
     common = ask_common(source)
     if not common:
         return 1
-    base, genre, full_date, country = common
+    base, full_date = common
 
-    print(f"\n파일 {len(files)}개")
-    files = normalize(files)
-    if not files:
+    describe(files)
+    genre = pick("장르 버킷", GENRES, str)
+    if not genre:
+        print("장르를 골라야 경로가 정해집니다.")
         return 1
+    country = ask_country() or 'jp'
 
     print("\n검색 중...")
     moves, misses = [], []
