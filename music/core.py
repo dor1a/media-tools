@@ -282,6 +282,9 @@ class Move:
     src: Path
     dst: Path
     track: dict
+    artist: str = ''
+    genre: str = ''
+
 
     @property
     def dst_rel(self):
@@ -303,7 +306,7 @@ def apply(moves, tagger=None):
             m.dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(m.src), str(m.dst))
             if tagger:
-                tagger(m.dst, m.track)
+                tagger(m.dst, m.track, artist=m.artist, genre=m.genre)
             results.append((m, None))
         except Exception as e:
             results.append((m, str(e)))

@@ -45,19 +45,25 @@ def _jpeg_size(data):
     return 0, 0
 
 
-def _fields(track, album=None):
+def _fields(track, album=None, artist=None, genre=None):
+    """태그에 쓸 값. artist 와 genre 는 폴더에 쓴 값으로 덮는다.
+
+    둘 다 검색 결과를 그대로 두면 폴더와 태그가 어긋난다 — 폴더는 `휘성` 인데
+    태그는 `Wheesung`, 폴더는 `K-Pop` 인데 태그는 `R&B／ソウル` 이 된다.
+    """
     total = track.get('trackCount') or (album or {}).get('trackCount') or ''
     num = track.get('trackNumber', 1)
+    name = artist or track.get('artistName', '')
     return {
         'title': track.get('trackName', ''),
         'album': track.get('collectionName', ''),
-        'artist': track.get('artistName', ''),
-        'albumartist': (album or {}).get('artistName') or track.get('artistName', ''),
+        'artist': name,
+        'albumartist': artist or (album or {}).get('artistName') or track.get('artistName', ''),
         'track': f"{num}/{total}" if total else str(num),
         'disc': str(track.get('discNumber', 1)),
         'multidisc': (track.get('discCount') or 1) > 1,
         'date': (track.get('releaseDate') or '')[:4],
-        'genre': track.get('primaryGenreName', ''),
+        'genre': genre or track.get('primaryGenreName', ''),
     }
 
 
@@ -78,7 +84,7 @@ def _write_mp3(path, f, cover):
         tag['APIC'] = APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=cover)
     tag.save(path, v2_version=4)
 
-    # 일부 플레이어가 APEv2 만 읽는다. 실패해도 ID3 는 이미 쓰였으므로 넘어간다.
+    # 일부 플레이어가 APEv2 만 읽는다. 실패해도 ID3v2 는 이미 쓰였으므로 넘어간다.
     try:
         try:
             ape = APEv2(path)
@@ -92,6 +98,11 @@ def _write_mp3(path, f, cover):
         ape.save(path)
     except Exception as e:
         print(f"  APEv2 건너뜀: {Path(path).name} — {e}")
+
+    # ID3v1 을 맨 마지막에 쓴다. 정의상 파일의 마지막 128바이트라, APE 를 뒤에
+    # 붙이면 그 자리에서 밀려나 없는 것과 같아진다. 라이브러리의 mp3 는 v1 과
+    # v2.4 와 APE 를 다 갖고 있다.
+    tag.save(path, v2_version=4, v1=2)
 
 
 def _write_flac(path, f, cover):
@@ -112,10 +123,10 @@ def _write_flac(path, f, cover):
     audio.save()
 
 
-def apply_tags(path, track, album=None):
+def apply_tags(path, track, album=None, artist=None, genre=None):
     """확장자에 맞는 포맷으로 태그를 쓴다. 실패는 예외로 올린다."""
     path = Path(path)
-    f = _fields(track, album)
+    f = _fields(track, album, artist, genre)
     cover = _artwork(track, album)
     if path.suffix.lower() == '.mp3':
         _write_mp3(path, f, cover)

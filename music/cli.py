@@ -204,6 +204,8 @@ def plan_moves(files, base, country, genre, full_date):
             core.destination(base, genre, album, track, f.suffix,
                              full_date=full_date, type_folder=kind, source=f),
             track,
+            core.artist_folder(album, f),
+            genre,
         ))
 
         # 한 앨범을 통째로 받은 경우가 흔하다. 그때 매번 다시 고르게 하지 않되,
@@ -389,7 +391,8 @@ def run_auto(files, source):
         album = core.as_album(hit)
         moves.append(core.Move(
             f, core.destination(base, genre, album, hit, f.suffix,
-                               full_date=full_date, source=f), hit))
+                               full_date=full_date, source=f), hit,
+            core.artist_folder(album, f), genre))
 
     if misses:
         print(f"\n검색 결과 없음 {len(misses)}개 (그대로 둡니다):")
