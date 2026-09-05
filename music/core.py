@@ -8,7 +8,10 @@ from pathlib import Path
 import requests
 
 ITUNES_BASE = "https://itunes.apple.com"
-AUDIO_EXTS = ['.mp3', '.flac']
+# 라이브러리에 들어가는 확장자는 mp3 와 flac 둘뿐이지만, 받아들이는 입력은
+# 그보다 넓다. 나머지는 convert 가 mp3 320 으로 맞춘다.
+LIBRARY_EXTS = ['.mp3', '.flac']
+AUDIO_EXTS = LIBRARY_EXTS + ['.wma', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff']
 
 # 라이브러리가 쓰는 국가 스토어. 같은 앨범도 스토어마다 메타데이터가 달라서,
 # J-Pop 은 jp, K-Pop 은 kr 로 물어야 원어 표기와 발매일이 맞다.

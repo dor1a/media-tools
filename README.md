@@ -107,6 +107,32 @@ pip install -r requirements.txt    # `uv pip install` where the venv has no pip
 python3 media.py                   # or: python3 -m music.cli "/path/to/staging"
 ```
 
+Two ways in, since filing and converting are not always wanted together:
+
+| | |
+| --- | --- |
+| 라이브러리 편입 | convert, look up, move, tag |
+| 변환만 | convert and stop, for when the filing comes later |
+
+## Format
+
+The library is mp3 at 320, and flac stays flac. Anything else that arrives
+is brought to 320 with ffmpeg before it is filed.
+
+| Input | What happens |
+| --- | --- |
+| flac | left alone — it is the better format, and 320 would be a one-way trip |
+| mp3 at 320 | left alone; re-encoding it only adds a generation of loss |
+| mp3 below 320 | encoded to 320. This buys nothing in quality and is purely the convention |
+| wma, m4a, aac, ogg, opus, wav, aiff | encoded to 320 |
+
+Conversions land in `_converted/` beside the source and the original is
+kept, so a bad encode has somewhere to fall back to. Cover art and tags
+come across, which matters when the iTunes lookup finds nothing and the
+tagging step never runs.
+
+Requires `ffmpeg`. Only this part needs it; nothing else in the repo does.
+
 It shows the whole plan and moves nothing until you say so. The destination
 is `/Volumes/Media`, where a wrong move is not something you can undo.
 

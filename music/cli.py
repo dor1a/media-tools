@@ -84,16 +84,56 @@ def plan_album(files, base, country, genre, full_date):
     return moves
 
 
-def main(path_arg=None):
-    """path_arg 는 media.py 가 자기 인자를 넘겨줄 때 쓴다."""
-    pathinput.enable()
-    raw = path_arg or (sys.argv[1] if len(sys.argv) > 1 else None) \
-        or input("정리할 폴더 또는 파일: ").strip()
-    files = core.audio_files(raw)
-    if not files:
-        print("❌ mp3 나 flac 파일이 없습니다.")
-        return 1
+def normalize(files, workdir):
+    """라이브러리 포맷(mp3 320, flac)으로 맞춘다. 무엇을 할지 먼저 보여준다."""
+    from music import convert
 
+    plans = [(f, *convert.verdict(f)) for f in files]
+    todo = [p for p in plans if p[1] == 'encode']
+    if not todo:
+        print("  전부 라이브러리 포맷입니다. 변환 없음.")
+        return files
+
+    print(f"\n── 변환 {len(todo)}개 ──")
+    for f, _, why in todo:
+        print(f"  {f.name}\n    {why}")
+    print("  원본은 지우지 않습니다.")
+    if input("\n변환할까? (엔터=예, n=취소): ").strip().lower() == 'n':
+        return []
+
+    def report(src, action, why, err):
+        if action == 'encode':
+            print(f"  ✅ {Path(src).name}")
+        elif action == 'fail':
+            print(f"  ❌ {Path(src).name} — {err}")
+
+    print()
+    try:
+        return convert.convert_all(files, workdir, on_each=report)
+    except convert.FFmpegMissing as e:
+        print(f"❌ {e}")
+        return []
+
+
+ACTIONS = [
+    ("라이브러리 편입   (변환 → 검색 → 이동 → 태그)", 'organize'),
+    ("변환만            (mp3 320 으로 맞추기)", 'convert'),
+]
+
+
+def run_convert(files, workdir):
+    """포맷만 맞춘다. 정리는 나중에 하고 싶을 때."""
+    out = normalize(files, workdir)
+    if not out:
+        return 1
+    moved = [f for f in out if f.parent.name == '_converted']
+    if moved:
+        print(f"\n{len(moved)}개를 {workdir / '_converted'} 에 두었습니다.")
+    return 0
+
+
+def run_organize(files, workdir):
+    """검색해서 라이브러리에 편입한다."""
     base = Path(input("라이브러리 루트 (예: /Volumes/Media/Music): ").strip() or '.').expanduser()
 
     genre = pick("장르 버킷", GENRES, str)
@@ -105,6 +145,11 @@ def main(path_arg=None):
     country = ask_country() or 'jp'
 
     print(f"\n파일 {len(files)}개")
+
+    files = normalize(files, workdir)
+    if not files:
+        return 1
+
     moves = plan_album(files, base, country, genre, full_date)
     if not moves:
         print("\n옮길 것이 없습니다.")
@@ -121,7 +166,7 @@ def main(path_arg=None):
     try:
         from music.tags import apply_tags
     except ImportError:
-        print("⚠️ mutagen 이 없어 태그 없이 옮깁니다. pip install mutagen")
+        print("⚠️ mutagen 이 없어 태그 없이 옮깁니다. uv pip install mutagen")
         apply_tags = None
 
     ok = 0
@@ -134,5 +179,35 @@ def main(path_arg=None):
     return 0
 
 
+def main(path_arg=None):
+    """path_arg 는 media.py 가 자기 인자를 넘겨줄 때 쓴다."""
+    pathinput.enable()
+
+    kind = pick("무엇을 할까요?", ACTIONS, lambda a: a[0])
+    if kind is None:
+        return 0
+    kind = kind[1]
+
+    raw = path_arg or (sys.argv[1] if len(sys.argv) > 1 else None) \
+        or input("\n폴더 또는 파일: ").strip()
+    files = core.audio_files(raw)
+    if not files:
+        print("❌ 음원 파일이 없습니다.")
+        return 1
+
+    # 파일 하나를 받았을 때 _converted 를 그 파일 아래 만들 수는 없다.
+    workdir = Path(raw).expanduser()
+    if workdir.is_file():
+        workdir = workdir.parent
+
+    if kind == 'convert':
+        return run_convert(files, workdir)
+    return run_organize(files, workdir)
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (KeyboardInterrupt, EOFError):
+        print("\n중단했습니다.")
+        sys.exit(130)
