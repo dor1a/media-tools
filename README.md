@@ -220,12 +220,47 @@ the middle of a title, which is a remix credit rather than a feature.
 APEv2 + FLAC with cover art, and `cli.py` is the only part that asks
 questions. Eight scripts used to carry copies of the first two between them.
 
+## unify
+
+`music/unify_tags.py` brings an existing library to a single ID3v2.4 tag. It
+removes ID3v1 and lifts ID3v2.3 to 2.4, rewriting that file's text frames as
+UTF-8. APEv2 and the embedded cover are left alone, and so are the frame
+encodings of files already on 2.4: latin-1 and UTF-8 are the same bytes over
+ASCII, which is not worth rewriting two thousand files for.
+
+```bash
+python3 music/unify_tags.py /path/to/library            # what would change
+python3 music/unify_tags.py /path/to/library --apply    # do it, then verify
+python3 music/unify_tags.py /path/to/library --restore id3v1-dump-….json
+```
+
+It takes no import from the package, so call it by path. `-m` would work
+only from the repo root, since that is how the package becomes importable,
+and the dump and the backup are written to the working directory. Run it
+from somewhere outside both the repo and the library; it stops if the
+working directory sits inside the library, because the backup it writes
+there would be swept up as library files on the next pass.
+
+It has to work in one pass, so it checks itself. Before touching anything it
+hashes every file's audio span — the MPEG frames with the tags peeled off
+either end — and hashes them again afterwards; one mismatch fails the run.
+APE key sets and cover sizes are compared the same way.
+
+Two things are set aside before any of that. ID3v1 goes to a JSON dump,
+which holds the whole library in a few hundred KB because each tag is 128
+bytes, and the few 2.3 files are copied whole: lifting them is the only step
+that rewrites the head of a file, and the dump cannot undo that. Removing
+ID3v1 truncates the last 128 bytes and nothing else, so the audio is never
+rewritten and a second run does nothing. Dumps and backups land in the
+working directory, so run it from outside this repo.
+
 ## kid3
 
-`kid3/SyncTags.qml` copies tag 2 into tags 1 and 3 and saves, for every
-selected file. The library keeps all three on its mp3s — ID3v1, ID3v2.4 and
-APE — and Kid3 has no equivalent of mp3tag's write-all checkboxes, so
-without it that is two menu items per file.
+`kid3/SyncTags.qml` copies tag 2 into tag 3 and saves, for every selected
+file. The library keeps two slots on its mp3s — ID3v2.4 and APE — and Kid3
+has no equivalent of mp3tag's write-all checkboxes, so without it that is a
+menu item per file. Tag 1 is deliberately not a target: writing it would put
+back the ID3v1 that `unify_tags.py` removes.
 
 Register it under Settings → Configure Kid3 → User Actions with the command
 `@qml /path/to/kid3/SyncTags.qml`, and it appears in the file list's context
@@ -237,10 +272,16 @@ Two things had to be found by trying them. `kid3-cli`'s multi-slot argument
 into each separately.
 
 Turning off "automatically hide unused tags" in Appearance is worth doing
-too: with it on, a file that has no ID3v1 or APE yet shows no field to put
-one in.
+too: with it on, a file that has no APE yet shows no field to put one in.
 
 ## Not here
 
 Windows packaging (pyinstaller, `.exe`) was dropped — nothing here runs on
 Windows any more.
+
+ID3v1 is no longer written, and `unify_tags.py` strips it from the library.
+It is read only when a file has no ID3v2, which none of these have, and
+mutagen can write it only as latin-1, which turns `다시 만난 날` into
+`?? ?? ?`. The library's own v1 tags were CP949 and had been readable the
+whole time, so new ones would have left the library less consistent than it
+already was.

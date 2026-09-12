@@ -7,9 +7,11 @@ Pillow 를 쓰지 않는다. FLAC 그림 블록이 원하는 건 가로와 세�
 from pathlib import Path
 
 import requests
-from mutagen.apev2 import APEv2, error as APEv2Error
+from mutagen.apev2 import APEv2, APEValue, BINARY, error as APEv2Error
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, APIC, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK
+
+from music import core
 
 # iTunes 아트워크는 URL 의 크기 부분을 바꾸면 원본에 가까운 것을 준다.
 ARTWORK_SIZE = '10000x10000'
@@ -50,12 +52,17 @@ def _fields(track, album=None, artist=None, genre=None):
 
     둘 다 검색 결과를 그대로 두면 폴더와 태그가 어긋난다 — 폴더는 `휘성` 인데
     태그는 `Wheesung`, 폴더는 `K-Pop` 인데 태그는 `R&B／ソウル` 이 된다.
+
+    제목도 같은 이유로 `wrap_feat` 을 거친다. 파일명은 `track_file` 에서 이미
+    감싸고 있어서, 태그만 맨몸으로 두면 파일명은 `(feat. Noa)` 인데 `TIT2` 는
+    `feat. Noa` 가 된다. 라이브러리는 파일명에 `(feat.` 이 있는 161 곡의 `TIT2`
+    가 161 건 모두 괄호였다 (2026-09-11 실측).
     """
     total = track.get('trackCount') or (album or {}).get('trackCount') or ''
     num = track.get('trackNumber', 1)
     name = artist or track.get('artistName', '')
     return {
-        'title': track.get('trackName', ''),
+        'title': core.wrap_feat(track.get('trackName', '')),
         'album': track.get('collectionName', ''),
         'artist': name,
         'albumartist': artist or (album or {}).get('artistName') or track.get('artistName', ''),
@@ -82,27 +89,36 @@ def _write_mp3(path, f, cover):
         tag['TPOS'] = TPOS(encoding=3, text=f['disc'])
     if cover:
         tag['APIC'] = APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=cover)
-    tag.save(path, v2_version=4)
+
+    # ID3v1 은 쓰지 않는다 (2026-09-12 결정). 우리는 항상 ID3v2.4 를 쓰고 v1 은
+    # v2 가 없을 때만 조회되므로 죽은 슬롯이다. 게다가 mutagen 은 v1 을 latin-1
+    # 로만 써서 `다시 만난 날` 이 `?? ?? ?` 가 된다 — 라이브러리의 기존 v1(mp3tag
+    # 가 CP949 로 쓴 것, 한국어는 멀쩡히 읽힌다) 보다 오히려 나쁜 값이 들어간다.
+    # `v1=0` 은 원본에 남아 있던 v1 도 같이 걷어낸다.
+    tag.save(path, v2_version=4, v1=0)
 
     # 일부 플레이어가 APEv2 만 읽는다. 실패해도 ID3v2 는 이미 쓰였으므로 넘어간다.
+    #
+    # 키는 라이브러리(mp3tag 산) 와 대소문자까지 맞춘다. mutagen 은 APE 키를
+    # 대소문자 구분 없이 다루므로 읽고 쓰는 데는 지장이 없지만, 파일에 남는
+    # 표기가 라이브러리와 갈리지 않게 맞춰 둔다. 앨범 아티스트만 공백이 들어간
+    # `Album Artist` 다. 커버도 라이브러리는 APIC 과 별개로 여기에 한 벌 더
+    # 갖고 있다 — 값은 `<파일명>\0<JPEG>` 꼴이다.
     try:
         try:
             ape = APEv2(path)
             ape.clear()
         except APEv2Error:
             ape = APEv2()
-        ape['Title'], ape['Album'] = f['title'], f['album']
-        ape['Artist'], ape['AlbumArtist'] = f['artist'], f['albumartist']
-        ape['Track'], ape['Disc'] = f['track'], f['disc']
-        ape['Genre'], ape['Year'] = f['genre'], f['date']
+        ape['TITLE'], ape['ARTIST'] = f['title'], f['artist']
+        ape['ALBUM'], ape['YEAR'] = f['album'], f['date']
+        ape['TRACK'], ape['GENRE'] = f['track'], f['genre']
+        ape['Album Artist'] = f['albumartist']
+        if cover:
+            ape['Cover Art (Front)'] = APEValue(b'Cover Art (Front).jpg\x00' + cover, BINARY)
         ape.save(path)
     except Exception as e:
         print(f"  APEv2 건너뜀: {Path(path).name} — {e}")
-
-    # ID3v1 을 맨 마지막에 쓴다. 정의상 파일의 마지막 128바이트라, APE 를 뒤에
-    # 붙이면 그 자리에서 밀려나 없는 것과 같아진다. 라이브러리의 mp3 는 v1 과
-    # v2.4 와 APE 를 다 갖고 있다.
-    tag.save(path, v2_version=4, v1=2)
 
 
 def _write_flac(path, f, cover):
