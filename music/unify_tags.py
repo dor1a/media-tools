@@ -39,14 +39,22 @@ from mutagen.apev2 import APEv2, APENoHeaderError
 
 # ─────────────────────────── 파일 훑기 ───────────────────────────
 
-def walk_mp3(root):
+def walk_mp3(root, errors=None):
     """readdir 이 준 이름을 그대로 쓰지 않는다.
 
     macOS 가 SMB 에서 돌려주는 이름은 NFD 라, 한글·가나가 자모로 쪼개지며
     바이트가 2~3배로 분다. 그대로 open 에 넣으면 255바이트 한도를 넘겨
     EINVAL 이 나는 파일이 생긴다 (2026-09-11 실측, 신서유기 S02 4건).
+
+    `errors` 를 주면 순회 중 열지 못한 디렉토리를 담는다. os.walk 는 기본으로
+    그런 디렉토리를 조용히 건너뛰기 때문에, 안 받으면 접근 불가 폴더 하나가
+    통째로 빠진 채 "전부 통과" 가 나온다.
     """
-    for dirpath, _dirnames, filenames in os.walk(root):
+    def on_error(e):
+        if errors is not None:
+            errors.append('순회 실패: %s (%s)' % (getattr(e, 'filename', '?'), e))
+
+    for dirpath, _dirnames, filenames in os.walk(root, onerror=on_error):
         for name in sorted(filenames):
             if not name.lower().endswith('.mp3'):
                 continue
@@ -146,20 +154,25 @@ def audio_sha(path):
 # ─────────────────────────── 스냅샷 ───────────────────────────
 
 def ape_digest(path):
-    """APE 의 키와 값을 함께 해시한다. 키 이름만 보면 값이 바뀐 것을 놓친다."""
+    """APE 의 키와 값을 함께 해시해 `(오류, 해시)` 로 돌려준다.
+
+    키 이름만 보면 값이 바뀐 것을 놓친다. 그리고 오류를 해시 자리에 문자열로
+    끼워 넣으면 안 된다 — 전후가 똑같이 깨져 있을 때 두 문자열이 같아서
+    "APE 내용 보존" 으로 통과한다. 오류는 오류로 올린다.
+    """
     try:
         ape = APEv2(path)
     except APENoHeaderError:
-        return 'none'
+        return None, 'none'
     except Exception as e:
-        return 'err:%s' % type(e).__name__
+        return 'APE 읽기 실패: %s' % type(e).__name__, None
     h = hashlib.sha256()
     for k in sorted(ape.keys()):
         h.update(k.encode('utf-8', 'replace'))
         h.update(b'\x00')
         h.update(bytes(ape[k]))
         h.update(b'\x00')
-    return h.hexdigest()
+    return None, h.hexdigest()
 
 
 def cover_digest(tag):
@@ -176,10 +189,14 @@ def cover_digest(tag):
 
 
 def snapshot(root, with_audio=True, skip=()):
-    """처리 전후 대조에 쓸 상태. err 가 있는 항목은 검증에서 실패로 센다."""
+    """처리 전후 대조에 쓸 상태를 `(기록, 순회오류)` 로 돌려준다.
+
+    err 가 있는 항목과 순회 오류는 검증에서 실패로 센다.
+    """
     out = {}
+    walk_errors = []
     skip = tuple(os.path.abspath(s) + os.sep for s in skip)
-    for p in walk_mp3(root):
+    for p in walk_mp3(root, errors=walk_errors):
         if any(os.path.abspath(p).startswith(s) for s in skip):
             continue
         rec = {'v1': None, 'v2': None, 'ver': None, 'enc': set(),
@@ -196,14 +213,16 @@ def snapshot(root, with_audio=True, skip=()):
             rec['cover'] = 'none'
         except Exception as e:
             rec['err'] = type(e).__name__
-        rec['ape'] = ape_digest(p)
+        ape_err, rec['ape'] = ape_digest(p)
+        if ape_err and not rec['err']:
+            rec['err'] = ape_err
         if with_audio and rec['err'] is None:
             try:
                 rec['audio'] = audio_sha(p)
             except (OSError, ValueError) as e:
                 rec['err'] = 'audio:%s' % e
         out[p] = rec
-    return out
+    return out, walk_errors
 
 
 # ─────────────────────────── 되돌리기 ───────────────────────────
@@ -258,7 +277,7 @@ def main():
 
     want_audio = not args.no_audio_check
     print('처리 전 상태를 읽는다%s …' % ('' if not want_audio else ' (오디오 해시 포함, 오래 걸린다)'))
-    before = snapshot(root, with_audio=want_audio)
+    before, walk_err_before = snapshot(root, with_audio=want_audio)
 
     unreadable = [p for p, r in before.items() if r['err']]
     # ID3v2 가 없는 파일에서 v1 을 떼면 태그가 하나도 안 남는다. 건드리지 않고
@@ -273,6 +292,9 @@ def main():
     print('  v2.3 → v2.4 대상     : %d' % len(to_v24))
     print('  ID3v1 뿐이라 건너뜀  : %d' % len(v1_only))
     print('  열기 실패            : %d' % len(unreadable))
+    print('  순회 실패            : %d' % len(walk_err_before))
+    for e in walk_err_before:
+        print('     %s' % e)
     for p in unreadable:
         print('     %s  (%s)' % (p, before[p]['err']))
     for p in v1_only:
@@ -285,8 +307,8 @@ def main():
         print('dry-run 이다. 적용하려면 --apply 를 준다.')
         return 0
 
-    if unreadable:
-        sys.exit('\n읽지 못한 파일이 있다. 그대로 두고 원인을 먼저 본다.')
+    if unreadable or walk_err_before:
+        sys.exit('\n읽지 못한 파일이나 폴더가 있다. 그대로 두고 원인을 먼저 본다.')
 
     # 덤프는 되돌릴 유일한 수단이라 덮어쓰지 않는다. 같은 초에 두 번 돌리면
     # 이름이 겹치고, 두 번째는 지울 v1 이 없어 빈 덤프가 되어 앞의 것을
@@ -317,6 +339,12 @@ def main():
     if to_v24:
         bak = os.path.join(out_dir,
                            'v23-backup-%s' % datetime.now().strftime('%Y%m%d-%H%M%S'))
+        # 이름이 초 단위라 같은 작업 디렉토리에서 같은 초에 두 번 돌면 겹친다.
+        # 겹치면 상대경로가 같은 백업이 조용히 덮이므로 아예 만들지 않는다.
+        try:
+            os.makedirs(bak, exist_ok=False)
+        except FileExistsError:
+            sys.exit('백업 디렉토리가 이미 있다, 덮어쓰지 않는다: %s' % bak)
         for p in to_v24:
             dst = os.path.join(bak, os.path.relpath(p, root))
             os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -354,7 +382,7 @@ def main():
 
     # ─── 자가검증 ───
     print('\n=== 검증 ===')
-    after = snapshot(root, with_audio=want_audio)
+    after, walk_err_after = snapshot(root, with_audio=want_audio)
 
     upgraded = set(to_v24)
     left_v1 = [p for p, r in after.items() if r['v1'] and p not in v1_only]
@@ -389,6 +417,7 @@ def main():
         ('v1 전용 파일 변형', v1only_touched),
         ('파일 사라짐', vanished),
         ('처리 후 읽기 실패', err_after),
+        ('처리 후 순회 실패', walk_err_after),
         ('처리 중 예외', failures),
     ]
     bad = False
@@ -405,11 +434,14 @@ def main():
     if bad:
         print('검증 실패. 위 항목을 확인할 것. 덤프로 ID3v1 은 되돌릴 수 있다.')
         return 1
+    if not want_audio:
+        print('통과. 다만 오디오 해시를 건너뛰었으므로 오디오 보존은 확인되지 않았다.')
+        return 0
     hashed = sum(1 for r in after.values() if r['audio'])
-    print('전부 통과. 오디오 %d곡 해시 동일, APE·커버 내용 보존.' % hashed)
     if hashed != len(after):
-        print('경고: %d곡 중 %d곡만 해시됐다.' % (len(after), hashed))
+        print('실패: %d곡 중 %d곡만 해시됐다.' % (len(after), hashed))
         return 1
+    print('전부 통과. 오디오 %d곡 해시 동일, APE·커버 내용 보존.' % hashed)
     return 0
 
 
