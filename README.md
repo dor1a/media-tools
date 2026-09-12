@@ -241,10 +241,18 @@ from somewhere outside both the repo and the library; it stops if the
 working directory sits inside the library, because the backup it writes
 there would be swept up as library files on the next pass.
 
-It has to work in one pass, so it checks itself. Before touching anything it
-hashes every file's audio span — the MPEG frames with the tags peeled off
-either end — and hashes them again afterwards; one mismatch fails the run.
-APE key sets and cover sizes are compared the same way.
+It has to work in one pass, so it checks itself, and it separates the two
+questions it could answer wrongly. Safety is whether anything was damaged:
+before touching a file it hashes the audio span — the MPEG frames with the
+tags peeled off either end — along with the APE keys and values and the
+cover data, and compares all three afterwards. The goal is whether the job
+finished: every file on ID3v2.4, none carrying ID3v1.
+
+Those are reported apart because they fail differently. A file holding only
+ID3v1 is left alone, since stripping it would leave no tags at all, but
+leaving it alone does not make the library uniform. Exit 1 means something
+broke, 2 means nothing broke and files remain that this tool will not touch,
+0 means both are clean.
 
 Two things are set aside before any of that. ID3v1 goes to a JSON dump,
 which holds the whole library in a few hundred KB because each tag is 128

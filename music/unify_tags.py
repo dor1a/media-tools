@@ -385,7 +385,11 @@ def main():
     after, walk_err_after = snapshot(root, with_audio=want_audio)
 
     upgraded = set(to_v24)
-    left_v1 = [p for p, r in after.items() if r['v1'] and p not in v1_only]
+    # 목표는 "모든 파일이 ID3v2.4 하나, ID3v1 없음" 이다. 건드리지 않기로 한
+    # 파일도 목표에는 미달이므로 여기서 빼지 않는다 — 빼면 v1 이 남아 있는데도
+    # "전부 통과" 가 나온다.
+    left_v1 = [p for p, r in after.items() if r['v1']]
+    not_v24 = [p for p, r in after.items() if not r['v2'] or r['ver'] != 4]
     left_v23 = [p for p, r in after.items() if r['v2'] and r['ver'] == 3]
     # UTF-8 로 다시 쓴 것은 이번에 승격한 파일뿐이다. 원래부터 v2.4 인 파일의
     # 인코딩은 건드리지 않으므로 UTF-16 이 남아 있어도 정상이다.
@@ -407,10 +411,9 @@ def main():
         if p in v1_only and (b['v1'], b['v2']) != (a['v1'], a['v2']):
             v1only_touched.append(p)
 
-    checks = [
-        ('ID3v1 남음', left_v1),
-        ('v2.3 남음', left_v23),
-        ('승격분에 UTF-16', left_utf16),
+    # 두 가지를 나눠 본다. 안전은 "망가뜨리지 않았나", 목표는 "끝났나" 다.
+    # 섞으면 손대지 않기로 한 파일 때문에 목표 미달인 채로 통과가 나온다.
+    safety = [
         ('오디오 바이트 변형', audio_diff if want_audio else []),
         ('APE 내용 변화', ape_diff),
         ('커버 내용 변화', cover_diff),
@@ -420,28 +423,47 @@ def main():
         ('처리 후 순회 실패', walk_err_after),
         ('처리 중 예외', failures),
     ]
-    bad = False
-    for label, items in checks:
-        print('  %s %-20s %d' % ('OK  ' if not items else '실패', label, len(items)))
-        if items:
-            bad = True
-            for it in items[:10]:
-                print('        %s' % it)
+    goal = [
+        ('ID3v1 남음', left_v1),
+        ('v2.3 남음', left_v23),
+        ('ID3v2.4 아님', not_v24),
+        ('승격분에 UTF-16', left_utf16),
+    ]
+
+    def report(title, rows):
+        worst = False
+        print('  [%s]' % title)
+        for label, items in rows:
+            print('    %s %-20s %d' % ('OK  ' if not items else '실패', label, len(items)))
+            if items:
+                worst = True
+                for it in items[:10]:
+                    print('          %s' % it)
+        return worst
+
+    broke = report('안전 — 건드리지 말아야 할 것', safety)
     if not want_audio:
-        print('  --  오디오 해시 대조는 건너뜀')
+        print('    --  오디오 해시 대조는 건너뜀')
+    unfinished = report('목표 — ID3v2.4 한 벌', goal)
+
+    hashed = sum(1 for r in after.values() if r['audio'])
+    if want_audio and hashed != len(after):
+        broke = True
+        print('    실패 해시 누락             %d곡 중 %d곡만' % (len(after), hashed))
 
     print()
-    if bad:
-        print('검증 실패. 위 항목을 확인할 것. 덤프로 ID3v1 은 되돌릴 수 있다.')
+    if broke:
+        print('안전 검사 실패. 위 항목을 확인할 것. 덤프로 ID3v1 은 되돌릴 수 있다.')
         return 1
+    if unfinished:
+        print('망가진 것은 없지만 목표 미달이다. 위 파일들은 ID3v2 가 없거나 v1 이 남아')
+        print('있어 이 도구가 손대지 않는다 — v2 로 옮긴 뒤 다시 돌릴 것.')
+        return 2
     if not want_audio:
         print('통과. 다만 오디오 해시를 건너뛰었으므로 오디오 보존은 확인되지 않았다.')
         return 0
-    hashed = sum(1 for r in after.values() if r['audio'])
-    if hashed != len(after):
-        print('실패: %d곡 중 %d곡만 해시됐다.' % (len(after), hashed))
-        return 1
-    print('전부 통과. 오디오 %d곡 해시 동일, APE·커버 내용 보존.' % hashed)
+    print('전부 통과. %d곡이 ID3v2.4 한 벌이고, 오디오 해시 동일, APE·커버 내용 보존.'
+          % len(after))
     return 0
 
 
