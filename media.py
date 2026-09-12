@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""/Volumes/Media 를 다루는 도구들의 진입점.
+"""Entry point for the tools that manage /Volumes/Media.
 
-    python3 media.py [폴더]
+    python3 media.py [folder]
 
-매체를 먼저 고른다. 영상과 음원은 필요한 것이 다르다 — 영상 쪽은
-mkvtoolnix 를 요구하고 mkv 만 모으며, 음원 쪽은 그 둘 다 아니다. 그래서 한
-메뉴에 섞지 않고 여기서 갈라 보낸다.
+Choose the medium first. Video requires mkvtoolnix and collects only MKV
+files, while audio has different dependencies and inputs. Dispatch to the
+appropriate menu here.
 """
 
 import os
@@ -46,7 +46,7 @@ def main():
         from mkv import cli as mkv_cli
         return mkv_cli.main(path_arg) or 0
 
-    # 음원은 requests 와 mutagen 이 있어야 해서 고른 뒤에 늦게 import 한다.
+    # Import audio tools only after selection; they need requests and mutagen.
     try:
         from music import cli as music_cli
     except ImportError as e:

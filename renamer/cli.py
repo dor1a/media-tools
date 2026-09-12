@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""TMDB 리네이머 — 터미널.
+"""Terminal interface for the TMDB renamer.
 
-    python3 -m renamer.cli [폴더]
+    python3 -m renamer.cli [folder]
 """
 
 import os
@@ -26,7 +26,7 @@ def pick(prompt, options, render):
 
 
 def run(base):
-    """폴더 하나를 받아 TMDB 로 이름을 정리한다. mkvtool 이 자기 폴더를 넘겨 부른다."""
+    """Rename one folder using TMDB; the MKV tool can pass its current folder."""
     base = os.path.abspath(os.path.expanduser(base))
     if not os.path.isdir(base):
         print(f"❌ 폴더가 없습니다: {base}")

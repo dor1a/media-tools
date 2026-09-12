@@ -1,14 +1,14 @@
-"""경로 입력에 셸 같은 편집을 붙인다 — 방향키·delete·tab 보완.
+"""Add shell-style path editing: arrow keys, delete and tab completion.
 
-표준 라이브러리만 쓴다. `readline` 을 import 하는 것만으로 `input()` 이
-줄 편집을 받게 되고, completer 를 달면 tab 보완까지 된다.
+Use only the standard library. Importing readline enables line editing in
+input(); registering a completer adds tab completion.
 """
 
 import os
 
 
 def _dir_completer(text, state):
-    """폴더만 보완한다. 이 도구의 입력은 항상 작업 폴더다."""
+    """Complete directories only; these tools always ask for a working folder."""
     stub = os.path.expanduser(text)
     parent = os.path.dirname(stub) or '.'
     prefix = os.path.basename(stub)
@@ -36,12 +36,12 @@ def enable():
     try:
         import readline
     except ImportError:
-        return  # 없으면 그냥 기본 input() — 기능은 다 동작한다
-    # 공백을 구분자에서 뺀다. 미디어 폴더 이름에 공백이 흔해서, 공백이
-    # 구분자면 "Re Zero" 의 뒷단어만 보완 대상이 되어 버린다.
+        return  # Fall back to ordinary input() without changing tool behavior.
+    # Remove spaces from delimiters. Media folders often contain spaces;
+    # otherwise completion would only see the last word in "Re Zero".
     readline.set_completer_delims('\t\n')
-    # macOS 파이썬은 GNU readline 대신 libedit 를 링크하는 경우가 많고
-    # 바인딩 구문이 다르다.
+    # macOS Python often links libedit rather than GNU readline, and their
+    # key binding syntax differs.
     if 'libedit' in (readline.__doc__ or ''):
         readline.parse_and_bind('bind ^I rl_complete')
     else:

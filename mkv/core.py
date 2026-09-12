@@ -1,4 +1,4 @@
-"""mkvtoolnix 호출과 파일 규칙. UI 없음 — cli.py 가 이 위에 얹힌다."""
+"""mkvtoolnix calls and file rules; cli.py provides the user interface."""
 
 import json
 import os
@@ -9,8 +9,8 @@ SUB_EXTS = ['.srt', '.ass']
 LANGS = ['kor', 'jpn', 'eng', 'und']
 TOOLS = ('mkvmerge', 'mkvpropedit')
 
-# mkvmerge --gui-mode 는 진행률을 줄 단위로 뱉는다 (기본 모드는 \r 로 덮어써서
-# 파싱이 번거롭다)
+# mkvmerge --gui-mode emits progress on separate lines. The default mode
+# overwrites the current line with \r, which is harder to parse.
 PROGRESS_RE = re.compile(r'#GUI#progress\s+(\d+)%')
 
 
@@ -19,11 +19,11 @@ def run(cmd):
 
 
 def missing_tools():
-    """없는 mkvtoolnix 명령의 목록. 비어 있으면 다 있다."""
+    """List missing mkvtoolnix commands; an empty list means all are available."""
     return [t for t in TOOLS if not run(['which', t]).stdout.strip()]
 
 
-# --- 조회 ------------------------------------------------------------------
+# --- Inspection ------------------------------------------------------------
 
 def probe(mkv):
     r = run(['mkvmerge', '-J', mkv])
@@ -37,11 +37,11 @@ def tracks_of(info, kind):
 
 
 def summary(mkv):
-    """{'video': str, 'audio': [(a번호, id번호, 언어, 코덱)], 'subs': [언어]}.
+    """{'video': str, 'audio': [(a_number, track_id, language, codec)], 'subs': [language]}.
 
-    오디오에 번호가 둘인 것은 도구가 서로 다른 체계를 쓰기 때문이다 —
-    mkvpropedit 은 오디오 중 순번(`a1`), mkvmerge 는 전역 트랙 id(`id0`).
-    섞으면 엉뚱한 트랙이 지워진다.
+    Audio has two identifiers: mkvpropedit uses the audio ordinal (`a1`),
+    while mkvmerge uses the global track ID (`id0`). Confusing them can
+    remove the wrong track.
     """
     info = probe(mkv)
     if not info:
@@ -58,14 +58,14 @@ def summary(mkv):
 
 
 def audio_language(mkv):
-    """첫 오디오 트랙의 언어. 트랙이 없으면 None, 읽기 실패면 False."""
+    """Return the first audio language, None for no track, or False on read failure."""
     s = summary(mkv)
     if s is None:
         return False
     return s['audio'][0][2] if s['audio'] else None
 
 
-# --- 파일 탐색 --------------------------------------------------------------
+# --- File discovery --------------------------------------------------------
 
 def mkvs_in(path):
     return sorted(
@@ -74,7 +74,7 @@ def mkvs_in(path):
 
 
 def find_candidates(root='.'):
-    """현재 위치와 바로 아래 디렉토리 중 mkv 가 들어있는 곳."""
+    """Find folders containing MKV files here and one directory level below."""
     root = os.path.abspath(root)
     out = []
     try:
@@ -96,7 +96,7 @@ def find_candidates(root='.'):
 
 
 def sub_for(mkv):
-    """옆에 있는 `<이름>.kor.srt` / `.kor.ass`. 없으면 None."""
+    """Find an adjacent `<name>.kor.srt` or `.kor.ass`, or return None."""
     base = mkv[:-4]
     for ext in SUB_EXTS:
         cand = f"{base}.kor{ext}"
@@ -105,19 +105,19 @@ def sub_for(mkv):
     return None
 
 
-# --- 변경 ------------------------------------------------------------------
+# --- Changes ---------------------------------------------------------------
 
 def set_audio_language(mkv, index, lang):
-    """리먹싱 없이 트랙 헤더만 고친다. index 는 `a번호`."""
+    """Edit track headers without remuxing. index is an audio ordinal (`aN`)."""
     r = run(['mkvpropedit', mkv, '--edit', f'track:a{index}', '--set', f'language={lang}'])
     return r.returncode == 0
 
 
 def remux(mkv, pre_args, sub=None, on_progress=None):
-    """파일을 다시 쓰고 원본은 `<이름>.backup` 으로 남긴다. (ok, 에러문자열).
+    """Rewrite a file, keeping `<name>.backup`. Return (ok, error_message).
 
-    remux 는 파일 전체를 다시 쓴다. 네트워크 마운트면 GB 단위 왕복이라
-    파일당 수 분이 걸리므로, 진행률을 흘려보내지 않으면 멈춘 것처럼 보인다.
+    Remuxing rewrites the entire file. On a network mount, transferring
+    gigabytes can take minutes per file; progress keeps it from looking stuck.
     """
     tmp = os.path.join(os.path.dirname(mkv), f"temp_{os.path.basename(mkv)}")
     cmd = ['mkvmerge', '--gui-mode', '-o', tmp] + pre_args + [mkv]
@@ -149,7 +149,7 @@ def remux(mkv, pre_args, sub=None, on_progress=None):
     return True, None
 
 
-# --- 백업 ------------------------------------------------------------------
+# --- Backups ---------------------------------------------------------------
 
 def backups_for(mkvs):
     return [f"{m}.backup" for m in mkvs if os.path.isfile(f"{m}.backup")]

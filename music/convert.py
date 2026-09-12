@@ -1,10 +1,10 @@
-"""들어온 파일을 라이브러리 포맷으로 맞춘다. UI 없음.
+"""Convert incoming files to library formats. No UI.
 
-라이브러리는 mp3 320 이 기준이고 flac 은 그대로 둔다. flac 은 상위 포맷이라
-320 으로 내리는 것은 컨벤션을 위해 음질을 버리는 쪽이고, 되돌릴 수도 없다.
+The library uses 320 kbps MP3 and keeps FLAC unchanged. Converting lossless
+FLAC to MP3 would discard audio information irreversibly just for consistency.
 
-변환은 제자리에서 한다. 결과가 원래 이름을 갖고 원본이 `.backup` 으로
-비켜나며, 이건 mkv 쪽 remux 와 같은 방식이다.
+Conversion happens in place. The output takes the original name, while the
+source moves to `.backup`, following the MKV remux convention.
 """
 
 import json
@@ -26,10 +26,10 @@ def have_ffmpeg():
 
 
 def bitrate_kbps(path):
-    """kbps. 못 읽으면 None.
+    """Return the bitrate in kbps, or None if unavailable.
 
-    VBR mp3 는 스트림에 bit_rate 가 비어 있는 경우가 있어 컨테이너 값으로
-    떨어진다 — 그 경우 평균값이다.
+    VBR MP3 streams may omit bit_rate. Fall back to the container bitrate,
+    which represents an average in that case.
     """
     cmd = ['ffprobe', '-v', 'error', '-select_streams', 'a:0',
            '-show_entries', 'stream=bit_rate:format=bit_rate',
@@ -46,7 +46,7 @@ def bitrate_kbps(path):
 
 
 def state(path):
-    """(표시할 상태, 라이브러리 포맷인가). 바꾸지 않고 알려만 준다."""
+    """Return (display status, matches library format) without changing the file."""
     path = Path(path)
     ext = path.suffix.lower()
     if ext in KEEP_AS_IS:
@@ -60,7 +60,7 @@ def state(path):
 
 
 def verdict(path):
-    """('keep'|'encode', 사유). 실제로 무엇을 할지 미리 보여주려고 나눠 뒀다."""
+    """Return ('keep'|'encode', reason) so the UI can preview the action."""
     path = Path(path)
     ext = path.suffix.lower()
     if ext in KEEP_AS_IS:
@@ -71,21 +71,21 @@ def verdict(path):
             return 'encode', '비트레이트를 못 읽음'
         if kbps >= TARGET_KBPS:
             return 'keep', f'이미 {kbps}k'
-        # 없던 정보가 생기지는 않는다. 라이브러리 전체가 320 이라 표기를
-        # 맞추는 것이고, 그 대가는 손실이 한 번 더 쌓이는 것이다.
+        # Re-encoding cannot recover missing information. Matching the library's
+        # 320 kbps convention adds another generation of lossy compression.
         return 'encode', f'{kbps}k → {TARGET_KBPS}k'
     return 'encode', f'{ext[1:]} → mp3 {TARGET_KBPS}k'
 
 
 def to_mp3(src, keep_original=True):
-    """제자리에서 mp3 320 으로 바꾼다. (ok, 에러문자열).
+    """Convert to 320 kbps MP3 in place. Return (ok, error message).
 
-    결과가 원래 자리에 남고 원본이 비켜난다 — mkv 쪽 remux 와 같은 방식으로,
-    남긴 원본은 `<이름>.<원래확장자>.backup` 이 된다. 임시 파일로 먼저 뽑는
-    것은 mp3 를 mp3 로 바꿀 때 입력과 출력 경로가 같아서다.
+    The output replaces the source, as in MKV remuxing. A retained source is
+    named `<name>.<original extension>.backup`. Write to a temporary file first
+    because MP3-to-MP3 conversion uses the same input and destination path.
 
-    커버와 태그는 그대로 옮긴다. 옮긴 뒤 iTunes 값으로 다시 쓰기는 하지만,
-    검색이 실패해 태그 단계까지 못 갔을 때 원본 태그마저 사라지면 손해다.
+    Copy the cover and tags. They will later be rewritten with iTunes metadata,
+    but the original metadata should survive if lookup fails before tagging.
     """
     src = Path(src)
     dst = src.with_suffix('.mp3')
@@ -99,7 +99,7 @@ def to_mp3(src, keep_original=True):
     r = subprocess.run(base + ['-map', '0', '-c:v', 'copy'] + tail,
                        capture_output=True, text=True)
     if r.returncode != 0:
-        # 커버가 없거나 스트림 구성이 달라 -map 0 이 실패하는 파일이 있다.
+        # Some files fail with -map 0 due to missing covers or stream layouts.
         r = subprocess.run(base + ['-vn'] + tail, capture_output=True, text=True)
     if r.returncode != 0:
         if tmp.exists():
@@ -115,9 +115,9 @@ def to_mp3(src, keep_original=True):
 
 
 def convert_all(files, on_each=None, keep_original=True):
-    """[Path] 를 라이브러리 포맷으로 맞춘 목록으로 바꾼다.
+    """Convert a list of Paths to library formats and return the resulting paths.
 
-    실패한 파일의 원본은 어느 쪽을 골라도 그대로 남는다.
+    Failed conversions retain their source regardless of keep_original.
     """
     if not have_ffmpeg():
         raise FFmpegMissing('ffmpeg 와 ffprobe 가 필요합니다. brew install ffmpeg')

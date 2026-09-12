@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TMDB 리네이머 — tkinter.
+"""Tkinter interface for the TMDB renamer.
 
     python3 -m renamer.gui
 """
@@ -86,7 +86,7 @@ class App(tk.Tk):
         self.update_idletasks()
 
     def run_bg(self, fn, done):
-        """네트워크 호출로 창이 멈추지 않게."""
+        """Keep network requests from blocking the window."""
         def worker():
             try:
                 result = fn()

@@ -229,17 +229,20 @@ encodings of files already on 2.4: latin-1 and UTF-8 are the same bytes over
 ASCII, which is not worth rewriting two thousand files for.
 
 ```bash
-python3 music/unify_tags.py /path/to/library            # what would change
-python3 music/unify_tags.py /path/to/library --apply    # do it, then verify
-python3 music/unify_tags.py /path/to/library --restore id3v1-dump-….json
+python3 /path/to/media-tools/music/unify_tags.py /path/to/library --backup-dir /path/to/backups
+python3 /path/to/media-tools/music/unify_tags.py /path/to/library --backup-dir /path/to/backups --apply
+python3 /path/to/media-tools/music/unify_tags.py /path/to/library --restore /path/to/backups/id3v1-dump-….json
 ```
 
-It takes no import from the package, so call it by path. `-m` would work
-only from the repo root, since that is how the package becomes importable,
-and the dump and the backup are written to the working directory. Run it
-from somewhere outside both the repo and the library; it stops if the
-working directory sits inside the library, because the backup it writes
-there would be swept up as library files on the next pass.
+It takes no import from the package, so it can run by absolute path from
+any working directory. `--backup-dir` puts the JSON dump and full backups
+in the chosen directory. It creates that directory only when applying
+changes that need it. Dry runs create no backups or directories.
+
+Without `--backup-dir`, output goes to the working directory. The backup
+directory must be outside the library, including when reached through a
+symlink. `--dump` overrides the JSON output path; relative paths are resolved
+from the working directory, and this path must also be outside the library.
 
 It has to work in one pass, so it checks itself, and it separates the two
 questions it could answer wrongly. Safety is whether anything was damaged:
@@ -250,17 +253,77 @@ finished: every file on ID3v2.4, none carrying ID3v1.
 
 Those are reported apart because they fail differently. A file holding only
 ID3v1 is left alone, since stripping it would leave no tags at all, but
-leaving it alone does not make the library uniform. Exit 1 means something
-broke, 2 means nothing broke and files remain that this tool will not touch,
-0 means both are clean.
+leaving it alone does not make the library uniform. For apply runs, exit 1
+means an error or a failed preservation check, 2 means preservation passed
+but normalization is incomplete, and 0 means the enabled checks passed.
+`--no-audio-check` omits audio hashing, so exit 0 with that option does not
+verify audio preservation. A dry run reports candidates and read errors;
+its exit status does not certify that the library is normalized or readable.
 
 Two things are set aside before any of that. ID3v1 goes to a JSON dump,
 which holds the whole library in a few hundred KB because each tag is 128
 bytes, and the few 2.3 files are copied whole: lifting them is the only step
 that rewrites the head of a file, and the dump cannot undo that. Removing
 ID3v1 truncates the last 128 bytes and nothing else, so the audio is never
-rewritten and a second run does nothing. Dumps and backups land in the
-working directory, so run it from outside this repo.
+rewritten and a second run does nothing. Choose a backup directory outside
+the repo to keep these files out of the working tree. `--apply` still edits
+the original music files; the backup directory holds the recovery files.
+
+### Docker on atsui
+
+`music/run_unify.sh` runs the pass against `/zfs/media/Music` with
+Python 3.14 and Mutagen 1.48.1 in Docker. It builds the image from
+`music/Dockerfile.unify`; the host needs Docker and Bash, with no Python
+packages installed on the host.
+
+```bash
+sudo bash /path/to/media-tools/music/run_unify.sh           # dry run
+sudo bash /path/to/media-tools/music/run_unify.sh --apply   # apply and verify
+```
+
+The dry run mounts the library read-only. `--apply` allows writes to the
+original MP3s and runs `music/checked_unify.py`, which records each file's
+UID, GID and mode before and after the tag pass. A difference causes exit 1;
+the wrapper reports changes but does not repair ownership or permissions.
+Successful runs print both the tag verification result and
+`UID_GID_MODE_OK: <count> files`.
+
+Each apply run creates a directory under `/zfs-ssd/media-tools-backups/`:
+
+```text
+unify-<UTC timestamp>-<unique suffix>/
+  ownership-before.json
+  ownership-after.json
+  result.json
+  id3v1-dump-<timestamp>.json       # when ID3v1 tags are removed
+  v23-backup-<timestamp>/          # full originals of files upgraded from v2.3
+```
+
+The container runs as root so it can edit files with different owners.
+Backup files belong to root, and each run directory has mode 700. Use sudo
+to inspect them. The launcher creates the top-level backup directory even
+for a dry run, but dry runs create no dumps or per-run records.
+
+Audio hashing reads the full MP3 collection once for a dry run and twice
+for an apply run. The wrapper always enables it. FLAC files are outside
+this pass. Source UID/GID checks must run on atsui's local filesystem;
+the Mac's SMB mount exposes client-side ownership values.
+
+The atsui run on 2026-09-13 KST verified 2,333 MP3s: 2,324 ID3v1 tags were
+removed and five Kygo *Cloud Nine* tracks were upgraded from v2.3. All
+files ended on v2.4 with no v1; audio hashes, APE values, covers, UID, GID
+and modes matched the pre-run values. The v1 removal loop reported 2,319
+because upgrading the five v2.3 files had already removed their v1 tags.
+
+A subsequent read-only check through `/Volumes/Media/Music` opened and
+parsed all 2,333 MP3s and 181 FLACs without errors or NFC path retries.
+Every MP3 had ID3v2.4, no ID3v1, and readable APE and APIC data. The five
+upgraded tracks had UTF-8 frame encodings. This SMB check read tags and
+metadata; audio preservation and source ownership were verified on atsui.
+
+After three more tracks were imported from Downloads, another SMB check
+opened 2,336 MP3s and 181 FLACs without errors. All MP3s had ID3v2.4 and
+no ID3v1. The added tracks retained their existing APE data.
 
 ## kid3
 
@@ -288,8 +351,8 @@ Windows packaging (pyinstaller, `.exe`) was dropped — nothing here runs on
 Windows any more.
 
 ID3v1 is no longer written, and `unify_tags.py` strips it from the library.
-It is read only when a file has no ID3v2, which none of these have, and
-mutagen can write it only as latin-1, which turns `다시 만난 날` into
-`?? ?? ?`. The library's own v1 tags were CP949 and had been readable the
-whole time, so new ones would have left the library less consistent than it
-already was.
+The library uses ID3v2.4 for Unicode text. Mutagen writes ID3v1 as latin-1,
+which turns `다시 만난 날` into `?? ?? ?`; sampled existing Korean v1 titles
+instead decoded correctly as CP949. This is a writing policy, not a claim
+that readers ignore v1: by default, Mutagen can supplement missing ID3v2
+frames with values from ID3v1.

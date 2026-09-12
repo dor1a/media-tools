@@ -1,0 +1,5 @@
+FROM python:3.14-slim
+RUN python -m pip install --no-cache-dir mutagen==1.48.1
+COPY unify_tags.py checked_unify.py /opt/unify/
+WORKDIR /tmp
+ENTRYPOINT ["python", "-u", "/opt/unify/checked_unify.py"]

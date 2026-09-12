@@ -1,4 +1,4 @@
-"""TMDB 조회와 파일명 규칙. UI 없음 — cli.py / gui.py 가 이 위에 얹힌다."""
+"""TMDB lookups and filename rules shared by cli.py and gui.py."""
 
 import os
 import re
@@ -22,7 +22,7 @@ class TmdbError(RuntimeError):
 
 
 def _load_dotenv():
-    """레포 루트의 .env 를 읽어 환경변수에 넣는다. 이미 있는 값은 덮지 않는다."""
+    """Load the repo root's .env into the environment, keeping existing values."""
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
     if not os.path.isfile(path):
         return
@@ -71,7 +71,7 @@ def search_series(query):
 
 
 def list_seasons(series_id):
-    """[{season_number, episode_count, air_date}, ...] — 시즌 0(스페셜) 포함."""
+    """Return [{season_number, episode_count, air_date}, ...], including season 0."""
     data = _get(f'/tv/{series_id}') or {}
     return [
         {
@@ -84,7 +84,7 @@ def list_seasons(series_id):
 
 
 def episode_map(series_id, season_number, lang='en'):
-    """{episode_number: {air_date, title}} — 원어에 없으면 영어로 대체."""
+    """Return {episode_number: {air_date, title}}, falling back to English."""
     data = _get(f'/tv/{series_id}/season/{season_number}', language=lang)
     if not data or not data.get('episodes'):
         data = _get(f'/tv/{series_id}/season/{season_number}', language='en')
@@ -99,7 +99,7 @@ def episode_map(series_id, season_number, lang='en'):
     }
 
 
-# --- 파일명 ----------------------------------------------------------------
+# --- Filenames -------------------------------------------------------------
 
 def sanitize(name):
     for bad, safe in SANITIZE_MAP.items():
@@ -108,25 +108,25 @@ def sanitize(name):
 
 
 def episode_code(filename):
-    """파일명에서 (season, episode). 없으면 None."""
+    """Extract (season, episode) from a filename, or return None."""
     m = re.search(r'S(\d{1,2})E(\d{1,2})', filename, re.IGNORECASE)
     return (int(m.group(1)), int(m.group(2))) if m else None
 
 
 def build_name(title, season, episode, air_date, ep_title, ext):
-    """[방영일] 원제 - S01E01 - 에피제목.ext  (자막이면 .kor 삽입)"""
+    """Build [air_date] original_title - S01E01 - episode_title.ext; add .kor for subtitles."""
     if ext.lower() in SUBTITLE_EXTS:
         ext = f'.kor{ext}'
     return f"[{air_date}] {title} - S{season:02}E{episode:02} - {sanitize(ep_title)}{ext}"
 
 
-# --- 시즌 탐색 --------------------------------------------------------------
+# --- Season discovery ------------------------------------------------------
 
 def detect_seasons(base_dir):
-    """폴더 구조에서 시즌을 추론. [(상대경로, season_number), ...]
+    """Infer seasons from folders. Return [(relative_path, season_number), ...].
 
-    'Specials' 는 0, 'Season N' 은 N, 그 외에는 안에 든 파일의 S##E## 로 판단한다.
-    base_dir 바로 아래에 에피소드 파일이 있으면 '.' 로도 잡는다.
+    'Specials' is 0 and 'Season N' is N; otherwise inspect S##E## in filenames.
+    Include '.' when base_dir itself contains episode files.
     """
     found = []
     for entry in sorted(os.listdir(base_dir)):
@@ -154,7 +154,7 @@ def detect_seasons(base_dir):
     return found
 
 
-# --- 리네임 계획 ------------------------------------------------------------
+# --- Rename plans ----------------------------------------------------------
 
 @dataclass
 class Rename:
@@ -171,7 +171,7 @@ class Rename:
 
 
 def plan(directory, title, season_number, episodes):
-    """디렉토리 안에서 해당 시즌 파일들의 리네임 계획을 만든다. 파일은 안 건드림."""
+    """Plan renames for one season in a directory without changing files."""
     out = []
     for fname in sorted(os.listdir(directory)):
         code = episode_code(fname)
@@ -188,7 +188,7 @@ def plan(directory, title, season_number, episodes):
 
 
 def apply(renames):
-    """계획을 실제로 반영. [(Rename, None|에러문자열), ...] 반환."""
+    """Apply the plan and return [(Rename, None|error_message), ...]."""
     results = []
     for r in renames:
         try:

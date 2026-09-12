@@ -1,7 +1,7 @@
-"""파일에 태그와 커버를 쓴다. mp3 는 ID3v2.4 + APEv2, flac 은 Vorbis comment.
+"""Write tags and covers: ID3v2.4 + APEv2 for MP3, Vorbis comments for FLAC.
 
-Pillow 를 쓰지 않는다. FLAC 그림 블록이 원하는 건 가로와 세로 두 값뿐이고,
-그건 JPEG 헤더에서 바로 읽을 수 있다.
+Pillow is unnecessary here. The width and height needed for the FLAC picture
+block can be read directly from the JPEG header.
 """
 
 from pathlib import Path
@@ -13,7 +13,7 @@ from mutagen.id3 import ID3, APIC, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRC
 
 from music import core
 
-# iTunes 아트워크는 URL 의 크기 부분을 바꾸면 원본에 가까운 것을 준다.
+# Request artwork closer to the original resolution by changing the URL size.
 ARTWORK_SIZE = '10000x10000'
 
 
@@ -32,7 +32,7 @@ def _artwork(track, album=None):
 
 
 def _jpeg_size(data):
-    """JPEG SOF 마커에서 (width, height). 못 읽으면 (0, 0)."""
+    """Read (width, height) from a JPEG SOF marker, or return (0, 0)."""
     i, n = 2, len(data)
     while i + 9 < n:
         if data[i] != 0xFF:
@@ -48,15 +48,15 @@ def _jpeg_size(data):
 
 
 def _fields(track, album=None, artist=None, genre=None):
-    """태그에 쓸 값. artist 와 genre 는 폴더에 쓴 값으로 덮는다.
+    """Build tag values, overriding artist and genre with the folder values.
 
-    둘 다 검색 결과를 그대로 두면 폴더와 태그가 어긋난다 — 폴더는 `휘성` 인데
-    태그는 `Wheesung`, 폴더는 `K-Pop` 인데 태그는 `R&B／ソウル` 이 된다.
+    Raw search results can disagree with the folder: a Korean artist name may
+    become `Wheesung`, and a `K-Pop` folder may receive a localized R&B genre.
 
-    제목도 같은 이유로 `wrap_feat` 을 거친다. 파일명은 `track_file` 에서 이미
-    감싸고 있어서, 태그만 맨몸으로 두면 파일명은 `(feat. Noa)` 인데 `TIT2` 는
-    `feat. Noa` 가 된다. 라이브러리는 파일명에 `(feat.` 이 있는 161 곡의 `TIT2`
-    가 161 건 모두 괄호였다 (2026-09-11 실측).
+    Titles also pass through `wrap_feat` to match filenames from `track_file`.
+    Otherwise a filename containing `(feat. Noa)` would have `feat. Noa` in
+    `TIT2`. All 161 library tracks with `(feat.` in their filenames also had
+    parentheses in `TIT2` when checked on 2026-09-11.
     """
     total = track.get('trackCount') or (album or {}).get('trackCount') or ''
     num = track.get('trackNumber', 1)
@@ -75,8 +75,8 @@ def _fields(track, album=None, artist=None, genre=None):
 
 
 def _write_mp3(path, f, cover):
-    # 새 ID3 객체를 저장하면 기존 태그 블록이 통째로 교체된다. 남은 프레임을
-    # 따로 지울 필요가 없다.
+    # Saving a new ID3 object replaces the existing tag block entirely.
+    # There is no need to delete leftover frames separately.
     tag = ID3()
     tag['TIT2'] = TIT2(encoding=3, text=f['title'])
     tag['TALB'] = TALB(encoding=3, text=f['album'])
@@ -90,20 +90,19 @@ def _write_mp3(path, f, cover):
     if cover:
         tag['APIC'] = APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=cover)
 
-    # ID3v1 은 쓰지 않는다 (2026-09-12 결정). 우리는 항상 ID3v2.4 를 쓰고 v1 은
-    # v2 가 없을 때만 조회되므로 죽은 슬롯이다. 게다가 mutagen 은 v1 을 latin-1
-    # 로만 써서 `다시 만난 날` 이 `?? ?? ?` 가 된다 — 라이브러리의 기존 v1(mp3tag
-    # 가 CP949 로 쓴 것, 한국어는 멀쩡히 읽힌다) 보다 오히려 나쁜 값이 들어간다.
-    # `v1=0` 은 원본에 남아 있던 v1 도 같이 걷어낸다.
+    # Do not write ID3v1 (decision: 2026-09-12). We always write ID3v2.4;
+    # ID3v2.4 carries the Unicode text required by this library.
+    # Mutagen writes v1 as Latin-1, replacing Korean text with question marks.
+    # That is worse than the library's existing CP949 tags written by mp3tag.
+    # `v1=0` also removes any ID3v1 tag left in the source.
     tag.save(path, v2_version=4, v1=0)
 
-    # 일부 플레이어가 APEv2 만 읽는다. 실패해도 ID3v2 는 이미 쓰였으므로 넘어간다.
+    # Some players only read APEv2. Ignore APE failures after ID3v2 is saved.
     #
-    # 키는 라이브러리(mp3tag 산) 와 대소문자까지 맞춘다. mutagen 은 APE 키를
-    # 대소문자 구분 없이 다루므로 읽고 쓰는 데는 지장이 없지만, 파일에 남는
-    # 표기가 라이브러리와 갈리지 않게 맞춰 둔다. 앨범 아티스트만 공백이 들어간
-    # `Album Artist` 다. 커버도 라이브러리는 APIC 과 별개로 여기에 한 벌 더
-    # 갖고 있다 — 값은 `<파일명>\0<JPEG>` 꼴이다.
+    # Match the casing of the library's mp3tag keys. Mutagen treats APE keys
+    # case-insensitively, but stored spelling should still match the library.
+    # The album artist key is `Album Artist`, including the space. The library
+    # also keeps a cover here independently of APIC, as `<filename>\0<JPEG>`.
     try:
         try:
             ape = APEv2(path)
@@ -140,7 +139,7 @@ def _write_flac(path, f, cover):
 
 
 def apply_tags(path, track, album=None, artist=None, genre=None):
-    """확장자에 맞는 포맷으로 태그를 쓴다. 실패는 예외로 올린다."""
+    """Write tags in the format for the extension; propagate failures."""
     path = Path(path)
     f = _fields(track, album, artist, genre)
     cover = _artwork(track, album)

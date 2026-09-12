@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""mkv 일괄 처리 — 터미널.
+"""Terminal interface for batch MKV processing.
 
-    python3 -m mkv.cli [폴더]
+    python3 -m mkv.cli [folder]
 
-폴더를 한 번 묻고 트랙, 자막, 이름 정리가 전부 그 폴더에서 돈다.
+Ask for a folder once and use it for tracks, subtitles and renaming.
 """
 
 import os
@@ -44,8 +44,8 @@ def short(name):
 def ask_dir(argv_path=None):
     path = argv_path
     if not path:
-        # 번호와 경로를 같은 자리에서 받는다. tab 보완이 켜져 있어 목록이
-        # 떠 있어도 경로를 치게 되고, 번호만 받으면 그게 오입력이 된다.
+        # Accept either a number or a path. With tab completion available,
+        # entering a path is valid even when the numbered list is shown.
         cands = core.find_candidates()
         print()
         for i, c in enumerate(cands, 1):
@@ -78,10 +78,10 @@ def ask_dir(argv_path=None):
 
 
 def run_remux(items, pre_args):
-    """[(mkv, sub)] 또는 [mkv] 를 순차 remux 하면서 진행률을 한 줄로 갱신한다.
+    """Remux [(mkv, sub)] or [mkv] sequentially with progress on one line.
 
-    끝나면 이번에 생긴 원본 백업을 지울지 묻는다 — 결과를 본 직후가
-    지우기 좋은 시점이라 별도 메뉴로 두지 않았다.
+    Ask whether to delete this run's original backups once the results
+    are visible, rather than making cleanup a separate menu action.
     """
     total = len(items)
     done = []
@@ -191,8 +191,10 @@ def act_drop_audio(mkvs):
 
 
 def act_rename(mkvs):
-    """TMDB 로 이름 정리. renamer 는 requests 가 필요해서 여기서만 늦게 import 한다
-    — mkv 기능만 쓰는 사람이 의존성 없이 돌릴 수 있어야 한다."""
+    """Rename using TMDB, importing the requests-dependent renamer on demand.
+
+    Users of the MKV operations alone do not need that dependency.
+    """
     try:
         from renamer import cli as renamer_cli
     except ImportError as e:
@@ -213,7 +215,7 @@ ACTIONS = [
 
 
 def main(path_arg=None):
-    """path_arg 는 media.py 가 자기 인자를 넘겨줄 때 쓴다."""
+    """Accept the folder argument forwarded by media.py as path_arg."""
     pathinput.enable()
 
     missing = core.missing_tools()

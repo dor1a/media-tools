@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""iTunes 음원 정리 — 터미널.
+"""Terminal interface for organizing music with iTunes metadata.
 
-    python3 -m music.cli [폴더]
+    python3 -m music.cli [folder]
 
-파일을 옮기기 전에 계획을 통째로 보여준다. 목적지가 라이브러리라 되돌리기가
-어렵다.
+Show the complete plan before moving files. Changes to the destination library
+are difficult to undo.
 """
 
 import os
@@ -17,26 +17,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pathinput
 from music import core
 
-# 라이브러리 최상위 버킷. iTunes 의 장르로는 못 채운다 — Utaite 와 Melody 는
-# 애플에 대응 장르가 없고, 같은 아티스트가 Anime 인지 J-Pop 인지도 사람 기준이다.
+# Top-level library categories cannot be inferred from iTunes genres. Apple
+# has no Utaite or Melody equivalent, and Anime vs. J-Pop is a personal choice.
 GENRES = ['J-Pop', 'K-Pop', 'C-Pop', 'Pop', 'Anime', 'Game', 'Utaite', 'Melody']
 
 
 def _width(text):
-    """터미널에서 차지하는 칸 수. 한글과 한자는 두 칸이다."""
+    """Return terminal cell width, counting wide Hangul and CJK characters as two."""
     return sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in text)
 
 
 def _pad(text, width):
-    """표시 폭 기준으로 오른쪽을 채운다. ljust 는 글자 수를 세서 한글이 섞이면
-    열이 어긋난다."""
+    """Pad to display width. ljust counts characters and misaligns columns
+    containing wide characters such as Hangul."""
     return text + ' ' * max(1, width - _width(text))
 
 
 def rule(label=''):
-    """단계 사이 구분선.
+    """Draw a separator between steps.
 
-    프롬프트가 연달아 나오면 어디까지 답했는지가 화면에서 안 보인다.
+    Consecutive prompts otherwise make completed steps hard to distinguish.
     """
     total = 56
     if label:
@@ -49,8 +49,8 @@ def rule(label=''):
 def pick(prompt, options, render, default=None, zero='건너뜀'):
     print()
     for i, o in enumerate(options, 1):
-        # 기본값 표시는 줄 앞에 둔다. 뒤에 붙이면 `feat.` 이 달린 긴 곡명과
-        # 이어져 읽혀서 제목의 일부처럼 보인다.
+        # Put the default marker first. A trailing marker can look like part
+        # of a long track title containing `feat.` credits.
         print(f"{'*' if o == default else ' '}{i}. {render(o)}")
     while True:
         raw = input(f"{prompt} (0={zero}{', 엔터=기본' if default is not None else ''}): ").strip()
@@ -64,10 +64,10 @@ def pick(prompt, options, render, default=None, zero='건너뜀'):
 
 
 def ask_source():
-    """음원이 든 폴더를 고르게 한다.
+    """Ask the user to select a folder containing audio.
 
-    번호와 경로를 같은 자리에서 받는다. tab 보완이 켜져 있어서 목록을 띄워두면
-    경로를 치는 쪽이 더 자연스럽고, 번호만 받으면 그게 오입력이 된다.
+    Accept both numbers and paths at the same prompt. With tab completion
+    enabled, typing a path is natural and should not be rejected as invalid.
     """
     cands = core.find_candidates()
     rule('작업 폴더')
@@ -109,20 +109,20 @@ def ask_country(current=None):
 
 
 def _norm(text):
-    """비교용으로 문자를 줄인다 — NFC 로 합치고, 공백과 기호를 빼고 소문자로.
+    """Normalize to NFC, lowercase, and remove spaces and symbols for comparison.
 
-    NFC 가 먼저다. 파일명은 NFD 로 저장돼서 `리` 가 `ㄹ`+`ㅣ` 로, `ン` 이
-    `ン`+탁점으로 쪼개져 있고, 그대로 비교하면 같은 이름이 안 맞는다.
+    Apply NFC first: filenames can contain decomposed Hangul syllables or
+    voiced kana, making visually identical names compare differently.
     """
     text = unicodedata.normalize('NFC', text)
     return ''.join(c for c in text.lower() if c.isalnum())
 
 
 def best_track(tracks, filename):
-    """파일명에 곡명이 들어 있으면 그 트랙. 없으면 None.
+    """Return the track whose title best matches the filename, or None.
 
-    고를 것을 없애지는 않고 기본값만 준다 — 잘못 맞췄을 때 엔터 한 번으로
-    엉뚱한 트랙이 되면 안 된다.
+    Supply a suggested default while retaining manual selection so the user
+    can review the match before accepting it.
     """
     stem = _norm(core.stem_nfc(filename))
     hits = [t for t in tracks if t.get('trackName') and _norm(t['trackName']) in stem]
@@ -130,11 +130,11 @@ def best_track(tracks, filename):
 
 
 def choose_album(f, country, genre):
-    """파일 하나로 검색해 앨범과 타입, 수록곡을 정한다.
+    """Search using one file and select its album, type, and track list.
 
-    (album, kind, tracks, country, genre) — 스토어나 장르를 바꿨으면 바뀐 값이
-    돌아온다. 한 폴더에 일본 곡과 한국 곡이 섞이는 게 보통이라, 둘 다 실행
-    단위가 아니라 앨범 단위로 정해질 수 있어야 한다.
+    Return (album, kind, tracks, country, genre), including any store or genre
+    changes. Folders commonly mix Japanese and Korean songs, so both settings
+    must be adjustable per album rather than only per run.
     """
     query = core.guess_query(f)
     rule(f'🔍 {query}')
@@ -177,7 +177,7 @@ def choose_album(f, country, genre):
 
 
 def plan_moves(files, base, country, genre, full_date):
-    """파일마다 검색한다. 폴더가 한 앨범이면 한 번만 고르고 넘어갈 수 있다."""
+    """Search per file, with an option to reuse one album for the whole folder."""
     moves = []
     album = kind = tracks = None
     reuse = False
@@ -208,8 +208,8 @@ def plan_moves(files, base, country, genre, full_date):
             genre,
         ))
 
-        # 한 앨범을 통째로 받은 경우가 흔하다. 그때 매번 다시 고르게 하지 않되,
-        # 물어보는 것은 한 번뿐이라 섞인 폴더에서 방해가 되지 않는다.
+        # Whole-album downloads are common. Offer reuse once to avoid repeated
+        # selection without repeatedly interrupting folders containing mixed albums.
         if not asked_reuse and len(files) > 1:
             asked_reuse = True
             reuse = input("\n나머지도 같은 앨범? (엔터=아니오, y=예): ").strip().lower() == 'y'
@@ -218,7 +218,7 @@ def plan_moves(files, base, country, genre, full_date):
 
 
 def normalize(files):
-    """라이브러리 포맷(mp3 320, flac)으로 맞춘다. 무엇을 할지 먼저 보여준다."""
+    """Preview changes, then normalize to library formats: 320 kbps MP3 or FLAC."""
     from music import convert
 
     plans = [(f, *convert.verdict(f)) for f in files]
@@ -239,7 +239,7 @@ def normalize(files):
     if input("\n변환할까? (엔터=예, n=취소): ").strip().lower() == 'n':
         return []
 
-    # 실패한 것의 원본은 어느 쪽을 골라도 남는다. 안 그러면 아무것도 안 남는다.
+    # Failed conversions retain their sources regardless of this choice.
     keep = input("원본은? (엔터=지움, k=.backup 으로 남김): ").strip().lower() == 'k'
 
     def report(src, action, why, err):
@@ -264,7 +264,7 @@ ACTIONS = [
 
 
 def describe(files):
-    """파일마다 지금 포맷을 적어준다. 바꾸지는 않는다 — 변환은 별도 메뉴다."""
+    """Display each file's current format. Conversion has a separate menu action."""
     from music import convert
 
     rule(f'파일 {len(files)}개')
@@ -273,25 +273,26 @@ def describe(files):
         label, ok = convert.state(f)
         if not ok:
             off += 1
-        # 상태를 앞에 정렬해 둔다. 파일마다 두 줄을 쓰면 스무 개만 돼도 화면을
-        # 넘긴다. 어긋난 것은 `!` 로 표시한다 — 기본값 `*` 와 같은 자리다.
+        # Align status first and keep one line per file to fit more on screen.
+        # Mark mismatches with `!` in the same position as the default `*` marker.
         print(f"{'!' if not ok else ' '} {_pad(label, 12)}{f.name}")
     if off:
         print(f"\n  {off}개가 라이브러리 포맷이 아니야. 바꾸려면 메뉴의 '변환만' 을 먼저 돌려.")
 
 
 def run_convert(files):
-    """포맷만 맞춘다. 정리는 나중에 하고 싶을 때."""
+    """Convert formats only, leaving organization for later."""
     return 0 if normalize(files) else 1
 
 
 def ask_common(default_base):
-    """파일을 보기 전에 정할 수 있는 것들. (base, full_date) 또는 None.
+    """Ask for settings before listing files. Return (base, full_date) or None.
 
-    기본값은 소스 폴더다. 라이브러리 경로는 머신마다 다르고(맥은 마운트,
-    서버는 로컬), 원본 옆에 트리를 세워두면 나중에 통째로 옮기면 된다.
+    Default to the source folder. Library paths vary by machine (mounted on
+    Mac, local on the server); a tree built beside the originals can be moved
+    into the library later.
 
-    장르와 스토어는 여기서 안 묻는다 — 파일 목록을 보고 정할 것들이다.
+    Ask for genre and store after showing the file list.
     """
     rule('설정')
     raw_base = input(f"라이브러리 루트 (엔터 시 {_short_path(default_base)}): ").strip()
@@ -305,7 +306,7 @@ def ask_common(default_base):
 
 
 def confirm_and_apply(moves):
-    """계획을 보여주고, 뺄 것을 받고, 옮긴다."""
+    """Show the plan, accept exclusions, and move the remaining files."""
     rule('계획')
     for i, m in enumerate(moves, 1):
         print(f"  {i}. {m.src.name}\n     → {m.dst}")
@@ -322,8 +323,8 @@ def confirm_and_apply(moves):
         print("남은 것이 없습니다.")
         return 0
 
-    # 엔터와 y 만 진행. 다른 입력은 오타로 보고 멈춘다 — 여기서부터는 파일이
-    # 실제로 움직인다.
+    # Proceed only on Enter or y. Stop on other input because files will
+    # actually move from this point onward.
     if input(f"\n{len(moves)}개를 옮기고 태그를 쓸까? (엔터=응, n=취소): ").strip().lower() not in ('', 'y'):
         print("취소했습니다. 파일은 그대로입니다.")
         return 0
@@ -345,7 +346,7 @@ def confirm_and_apply(moves):
 
 
 def run_organize(files, source):
-    """앨범과 트랙을 직접 고른다."""
+    """Organize files with manual album and track selection."""
     common = ask_common(source)
     if not common:
         return 1
@@ -367,7 +368,7 @@ def run_organize(files, source):
 
 
 def run_auto(files, source):
-    """묻지 않고 첫 검색 결과로 잡는다. 계획을 보고 뺄 것만 고른다."""
+    """Use first search results, then let the user exclude entries from the plan."""
     common = ask_common(source)
     if not common:
         return 1
@@ -405,7 +406,7 @@ def run_auto(files, source):
 
 
 def main(path_arg=None):
-    """path_arg 는 media.py 가 자기 인자를 넘겨줄 때 쓴다."""
+    """Accept path_arg when media.py forwards its own command-line argument."""
     pathinput.enable()
 
     kind = pick("무엇을 할까요?", ACTIONS, lambda a: a[0])

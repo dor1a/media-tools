@@ -1,29 +1,29 @@
 /**
- * Tag 2 의 내용을 Tag 3(APE)에 복사하고 저장한다.
+ * Copy Tag 2 to Tag 3 (APE) and save.
  *
- * 라이브러리의 mp3 는 ID3v2.4 와 APE 두 슬롯을 채우는데, Kid3 에는 mp3tag
- * 처럼 "저장할 때 전부 쓰기"에 해당하는 설정이 없어서 손으로 복사해야 한다.
- * 선택한 파일 전부에 대해 그것을 대신한다.
+ * Library MP3s use both ID3v2.4 and APE. Kid3 has no equivalent to mp3tag's
+ * option to write all tag formats on save, so tags must be copied manually.
+ * This action performs that copy for every selected file.
  *
- * Tag 1(ID3v1) 은 대상이 아니다 (2026-09-12 결정). 도구가 더는 쓰지 않고
- * 라이브러리에서도 걷어냈으므로, 여기서 복사하면 지운 것을 되살리게 된다.
+ * Exclude Tag 1 (ID3v1), as decided on 2026-09-12. The tool no longer writes
+ * it, and the library has had it removed; copying it would restore deleted tags.
  *
- * Kid3 → Settings → Configure Kid3 → User Actions 에 등록해서 쓴다.
+ * Register under Kid3 → Settings → Configure Kid3 → User Actions.
  */
 
 import Kid3 1.1
 
 Kid3Script {
   onRun: {
-    // Frame.Tag_1/2/3 은 0/1/2 이고, toTagVersion 은 비트마스크를 받는다.
-    // 대상이 하나로 줄었어도 배열과 반복은 남겨 둔다 — 슬롯을 다시 늘릴 때
-    // 붙여넣기를 슬롯마다 따로 해야 한다는 것이 여기 적혀 있어야 한다.
-    // 두 비트를 합친 마스크로 한 번에 부르면 앞의 하나에만 들어간다 (실측).
+    // Frame.Tag_1/2/3 are 0/1/2; toTagVersion accepts a bitmask.
+    // Keep the array and loop even with one target: each slot needs a
+    // separate paste if more targets are added later. A combined mask
+    // pasted into only the first slot when tested.
     var source = script.toTagVersion(1 << Frame.Tag_2)
     var targets = [script.toTagVersion(1 << Frame.Tag_3)]
 
     function doWork() {
-      // Tag 2 가 비어 있으면 빈 값을 퍼뜨리게 되므로 건너뛴다.
+      // Skip empty Tag 2 values to avoid spreading empty tags.
       if (app.selectionInfo.tag(Frame.Tag_2).tagFormat) {
         app.copyTags(source)
         for (var i = 0; i < targets.length; ++i) {
@@ -34,8 +34,8 @@ Kid3Script {
       if (!nextFile()) {
         Qt.quit()
       } else {
-        // 한 박자 쉬어야 저장이 끝난 뒤 다음 파일로 넘어간다. 번들 스크립트도
-        // 같은 방식이다.
+        // Defer the next file until saving finishes, following the
+        // same approach as the bundled scripts.
         setTimeout(doWork, 1)
       }
     }

@@ -1,4 +1,4 @@
-"""iTunes 조회와 음원 라이브러리 경로 규칙. UI 없음 — cli.py 가 이 위에 얹힌다."""
+"""iTunes lookups and music library path rules. UI lives in cli.py."""
 
 import os
 import re
@@ -10,17 +10,17 @@ from pathlib import Path
 import requests
 
 ITUNES_BASE = "https://itunes.apple.com"
-# 라이브러리에 들어가는 확장자는 mp3 와 flac 둘뿐이지만, 받아들이는 입력은
-# 그보다 넓다. 나머지는 convert 가 mp3 320 으로 맞춘다.
+# The library stores only MP3 and FLAC, but accepts more input formats.
+# The convert module converts the other formats to 320 kbps MP3.
 LIBRARY_EXTS = ['.mp3', '.flac']
 AUDIO_EXTS = LIBRARY_EXTS + ['.wma', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff']
 
-# 라이브러리가 쓰는 국가 스토어. 같은 앨범도 스토어마다 메타데이터가 달라서,
-# J-Pop 은 jp, K-Pop 은 kr 로 물어야 원어 표기와 발매일이 맞다.
+# Regional stores used by the library. Album names and release dates can vary
+# by region; search availability is tracked separately in EMPTY_SEARCH_STORES.
 COUNTRY_CODES = ['jp', 'kr', 'us', 'gb', 'tw', 'cn', 'de', 'fr']
 
-# Windows-illegal characters, replaced with their full-width forms. renamer 와
-# 같은 표를 쓴다 — 라이브러리 전체가 한 규칙이어야 한다.
+# Replace Windows-illegal characters using the same mapping as renamer,
+# keeping path rules consistent across the library.
 SANITIZE_MAP = {
     '/': '／', '\\': '＼', ':': '：', '*': '＊', '?': '？',
     '"': "'", '<': '〈', '>': '〉', '|': '｜',
@@ -28,17 +28,17 @@ SANITIZE_MAP = {
 
 TYPES = ['Albums', 'Singles & EPs', 'Compilations', 'Live Albums', 'Indies']
 
-# 앨범명으로만 알 수 있는 것들. iTunes 는 라이브도 베스트도 따로 표시해주지
-# 않아서 이름을 볼 수밖에 없고, 그래서 결과는 제안이지 결정이 아니다.
+# Infer live and best-of releases from album titles because iTunes does not
+# label them separately. These matches are suggestions for the user to review.
 LIVE_MARKERS = ('(live)', '[live]', ' - live', 'ライブ', '라이브', 'live at ', 'live in ')
 BEST_MARKERS = ('best', 'greatest hits', 'complete', 'collection', 'anthology', 'ベスト')
 
 VARIOUS = 'various artists'
 
-# iTunes Store 가 음원을 팔지 않는 나라는 Search 카탈로그가 비어 있다. 곡이 없는
-# 게 아니라 검색만 0건이라(같은 곡을 lookup 하면 정상으로 나온다) "그 스토어에
-# 없다"로 읽고 포기하기 쉽다. kr 은 2026-09-05 실측 — `BTS`·`아이유`·`Wheesung`
-# 어느 것으로도 0건이었다.
+# Search catalogs can be empty in regions without iTunes music sales, even
+# when lookup returns the same tracks. Do not mistake zero search results for
+# missing tracks. On 2026-09-05, kr returned no results for `BTS`, IU's Korean
+# name, or `Wheesung`.
 EMPTY_SEARCH_STORES = {
     'kr': '한국은 iTunes 음원을 안 팔아서 검색 카탈로그가 비어 있어. jp 나 us 로 찾아봐.',
 }
@@ -57,7 +57,7 @@ def _get(path, **params):
 
 
 def as_album(track):
-    """곡 결과에서 앨범 부분만 뽑는다. 곡 결과가 앨범 정보를 다 들고 온다."""
+    """Extract album metadata carried in a track search result."""
     return {
         'collectionId': track.get('collectionId'),
         'collectionName': track.get('collectionName', ''),
@@ -70,16 +70,16 @@ def as_album(track):
 
 
 def search_tracks(query, country='jp', limit=25):
-    """곡 검색 결과 그대로. 앨범 정보가 각 행에 함께 온다."""
+    """Return raw track search results, each including album metadata."""
     return _get('/search', term=query, media='music', entity='song',
                 limit=limit, country=country)
 
 
 def search_albums(query, country='jp', limit=25):
-    """곡으로 검색해서 그 곡이 실린 앨범들을 추린다.
+    """Search for tracks and collect the albums that contain them.
 
-    앨범(`entity=album`)으로 바로 찾지 않는 것은 파일명이 대개 `아티스트 - 곡`
-    이라서다. 곡으로 물어야 수록 앨범이 딸려 나온다.
+    Filenames usually follow `artist - track`, so search for songs rather than
+    using `entity=album` directly to find their containing albums.
     """
     seen = {}
     for t in search_tracks(query, country, limit):
@@ -90,24 +90,24 @@ def search_albums(query, country='jp', limit=25):
 
 
 def first_match(query, country='jp'):
-    """첫 검색 결과. 자동 모드가 쓰는 것 — 고르지 않고 맨 앞을 믿는다."""
+    """Return the first search result for automatic mode without manual selection."""
     rows = search_tracks(query, country, limit=1)
     return rows[0] if rows else None
 
 
 def album_tracks(collection_id, country='jp'):
-    """앨범의 수록곡. lookup 은 첫 결과로 앨범 자신을 돌려주므로 걸러낸다."""
+    """Return album tracks, filtering out the album record returned by lookup."""
     rows = _get('/lookup', id=collection_id, entity='song', country=country)
     return [t for t in rows if t.get('kind') == 'song' and t.get('trackName')]
 
 
-# --- 경로 규칙 --------------------------------------------------------------
+# --- Path rules --------------------------------------------------------------
 
 def sanitize(name):
-    """금지문자를 전각으로 바꾼다. 글자를 버리지 않는 게 요점.
+    """Replace forbidden characters with safe equivalents instead of dropping them.
 
-    옛 스크립트는 `isalnum()` 이 아닌 문자를 통째로 지워서 `Bird & Insect` 가
-    `Bird  Insect` 가 됐다. 앨범명은 메타데이터라 손대면 안 된다.
+    The old script removed every non-alphanumeric character, turning
+    `Bird & Insect` into `Bird  Insect`. Preserve album title metadata.
     """
     for bad, safe in SANITIZE_MAP.items():
         name = name.replace(bad, safe)
@@ -115,18 +115,18 @@ def sanitize(name):
 
 
 def album_type(album):
-    """타입 폴더 이름. Various Artists 면 None — 타입 폴더 없이 평면 배치한다.
+    """Return the type folder, or None for a flat Various Artists layout.
 
-    `Indies` 는 여기서 안 나온다. 외부 메타데이터에 없는 개인 분류라 사람이
-    고르는 수밖에 없다.
+    `Indies` is a personal category absent from external metadata, so it must
+    be selected manually and is never inferred here.
     """
     artist = (album.get('artistName') or '').strip().lower()
     if artist == VARIOUS:
         return None
 
     name = (album.get('collectionName') or '').lower()
-    # iTunes 는 싱글과 EP 의 제목 뒤에 실제로 ` - Single` / ` - EP` 를 붙인다.
-    # 이름 중간에 든 'Single' 을 세던 옛 판정은 `Single Bed` 같은 제목을 오분류했다.
+    # iTunes appends ` - Single` or ` - EP` to release titles. Matching 'Single'
+    # anywhere in a title previously misclassified names such as `Single Bed`.
     if name.endswith(' - single') or name.endswith(' - ep'):
         return 'Singles & EPs'
     if any(m in name for m in LIVE_MARKERS):
@@ -140,9 +140,9 @@ def album_type(album):
 
 
 def release_folder(album, full_date=True):
-    """`[2023.03.29] 앨범명` 또는 `[2021] 앨범명`.
+    """Build `[2023.03.29] Album title` or `[2021] Album title`.
 
-    iTunes 는 발매일을 ISO 로 온전히 주는데 옛 스크립트는 연도만 쓰고 버렸다.
+    iTunes provides a full ISO release date; the old script kept only the year.
     """
     iso = (album.get('releaseDate') or '')[:10]
     if full_date and len(iso) == 10:
@@ -152,19 +152,20 @@ def release_folder(album, full_date=True):
     return f"[{stamp}] {sanitize(album.get('collectionName') or '')}"
 
 
-# 맨 뒤에 붙은 참여 표기. `ft.` 는 넣지 않는다 — 라이브러리에서 그건 리믹스
-# 크레딧이 제목 중간에 든 경우였고(`… Neetz ft. Ryohu … Remix`) 감싸면 제목이
-# 망가진다.
+# Match trailing featured-artist credits. Exclude `ft.` because library titles
+# use it inside remix credits (`… Neetz ft. Ryohu … Remix`), where wrapping the
+# rest of the title would produce incorrect parentheses.
 FEAT_RE = re.compile(r'\s+(feat\.|featuring)\s+(.+)$', re.I)
 WRAPPED_RE = re.compile(r'[(\[]\s*(feat\.|ft\.|featuring)', re.I)
 
 
 def wrap_feat(name):
-    """`제목 feat. X` → `제목 (feat. X)`. 이미 감싸져 있으면 그대로.
+    """Turn `Title feat. X` into `Title (feat. X)`; leave wrapped credits alone.
 
-    iTunes 는 맨몸으로 주고 라이브러리는 괄호로 쓴다 — 2026-09-05 실측에서
-    참여 표기 170건 중 159건이 `(feat.`, 맨몸은 0건이었다. 제목에 이미 괄호가
-    있으면 애플이 `[feat. …]` 로 주는데, 그건 이미 감싸진 것이라 통과한다.
+    iTunes supplies unwrapped credits, while the library uses parentheses.
+    On 2026-09-05, 159 of 170 featured-artist credits used `(feat.` and none
+    were unwrapped. Apple also uses `[feat. …]` when a title already contains
+    parentheses; those credits are already wrapped and pass through.
     """
     if WRAPPED_RE.search(name):
         return name
@@ -175,19 +176,20 @@ def wrap_feat(name):
 
 
 def track_file(track, ext):
-    """`## - 곡명.ext` — 트랙번호는 두 자리."""
+    """Build `## - Track title.ext` with a two-digit track number."""
     no = str(track.get('trackNumber') or 1).zfill(2)
     return f"{no} - {sanitize(wrap_feat(track.get('trackName') or ''))}{ext}"
 
 
 def artist_folder(album, source=None):
-    """아티스트 폴더 이름. 파일명이 `아티스트 - 곡` 이면 그쪽을 쓴다.
+    """Choose the artist folder, preferring filenames that follow `artist - track`.
 
-    스토어가 이름 표기까지 정해버리기 때문이다 — kr 검색이 비어 있어 한국 곡을
-    jp 에서 찾으면 `휘성` 이 `Wheesung` 으로 온다. 라이브러리는 원어 표기이고
-    (K-Pop 폴더가 전부 한글이다) 파일명이 이미 그걸 담고 있다.
+    Stores can change artist spelling: searching jp when kr is empty returns
+    `Wheesung` instead of the Korean name. The library uses native spelling
+    (all K-Pop artist folders use Hangul), already present in source filenames.
 
-    컴필레이션은 예외다. 파일명의 이름은 곡 아티스트라 앨범 아티스트가 아니다.
+    Compilations are an exception: filenames identify track artists rather
+    than the album artist.
     """
     itunes = (album.get('artistName') or '').strip()
     if itunes.lower() == VARIOUS:
@@ -200,10 +202,10 @@ def artist_folder(album, source=None):
 
 
 def destination(base, genre, album, track, ext, full_date=True, type_folder=..., source=None):
-    """`<base>/<장르>/<아티스트>/<타입>/[날짜] <앨범>/## - <곡>.ext`
+    """Build `<base>/<genre>/<artist>/<type>/[date] <album>/## - <track>.ext`.
 
-    장르는 부르는 쪽이 준다. iTunes 의 `primaryGenreName` 은 이 라이브러리의
-    버킷(J-Pop / Utaite / Melody …)과 대응하지 않아서 자동으로 못 채운다.
+    The caller supplies the genre. iTunes `primaryGenreName` cannot be mapped
+    automatically to the library's categories (J-Pop / Utaite / Melody …).
     """
     kind = album_type(album) if type_folder is ... else type_folder
     parts = [str(base), sanitize(genre), sanitize(artist_folder(album, source))]
@@ -213,12 +215,12 @@ def destination(base, genre, album, track, ext, full_date=True, type_folder=...,
     return Path(*parts)
 
 
-# --- 파일 --------------------------------------------------------------------
+# --- Files --------------------------------------------------------------------
 
 def audio_files(path, recursive=False):
-    """기본은 그 폴더 바로 아래만. 하위까지 훑으려면 recursive.
+    """List direct children by default; use recursive to include subdirectories.
 
-    비켜난 원본(`*.backup`)은 확장자가 달라 저절로 빠진다.
+    Retained originals (`*.backup`) are excluded by their extension.
     """
     p = Path(path).expanduser()
     if p.is_file() and p.suffix.lower() in AUDIO_EXTS:
@@ -232,13 +234,13 @@ def audio_files(path, recursive=False):
     )
 
 
-# 스테이징이 실제로 놓이는 자리들. 여기와 그 바로 아래를 훑어 고르게 한다 --
-# 경로를 외워 치는 것보다 고르는 쪽이 빠르고, mkv 도구도 같은 방식이다.
+# Common staging locations. Scan these and their immediate subdirectories so
+# users can pick a folder instead of typing a path, as in the MKV tool.
 SCAN_ROOTS = ['.', '~/Downloads', '~/Desktop']
 
 
 def find_candidates(roots=None):
-    """음원이 든 폴더 후보. [(경로, 파일수)] — 중복은 없앤다."""
+    """Return deduplicated audio folder candidates as [(path, file count)]."""
     out, seen = [], set()
     for root in (roots or SCAN_ROOTS):
         base = Path(root).expanduser()
@@ -260,22 +262,22 @@ def find_candidates(roots=None):
 
 
 def stem_nfc(path):
-    """파일 이름(확장자 제외)을 NFC 로. macOS 는 파일명을 NFD 로 저장한다.
+    """Normalize the filename stem to NFC for metadata comparisons.
 
-    `ン` 이 `ン` + 탁점으로, 한글은 자모로 쪼개져 저장되므로, iTunes 가 주는
-    NFC 문자열과 그대로 비교하면 눈에 같아 보이는 이름이 안 맞는다.
+    Filenames can contain decomposed Hangul syllables or voiced kana. Without
+    normalization, visually identical names may not match iTunes NFC strings.
     """
     return unicodedata.normalize('NFC', Path(path).stem)
 
 
 def guess_query(path):
-    """`아티스트 - 곡` 파일명에서 검색어. 구분자가 없으면 이름 통째로."""
+    """Build a query from `artist - track`, or use the whole stem without a separator."""
     stem = stem_nfc(path)
     artist, sep, title = stem.partition(' - ')
     return f"{artist.strip()} {title.strip()}" if sep else stem.strip()
 
 
-# --- 계획과 적용 --------------------------------------------------------------
+# --- Planning and application ------------------------------------------------
 
 @dataclass
 class Move:
@@ -288,15 +290,15 @@ class Move:
 
     @property
     def dst_rel(self):
-        """base 아래 상대경로 — 확인 화면에 쓰라고."""
+        """Return the destination as text for the confirmation display."""
         return str(self.dst)
 
 
 def apply(moves, tagger=None):
-    """계획을 실제로 반영. [(Move, None|에러문자열), ...] 반환.
+    """Apply planned moves and return [(Move, None|error message), ...].
 
-    계획과 적용을 나눈 것은 목적지가 라이브러리이기 때문이다. 옮기고 나서야
-    틀린 걸 알면 되돌릴 방법이 없다.
+    Planning is separate because the destination is the library. Review moves
+    before applying them; discovering mistakes afterward offers no automatic undo.
     """
     results = []
     for m in moves:
