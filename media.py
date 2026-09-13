@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pathinput
 
 MEDIA = [
-    ("영상  (mkv 트랙, 자막, TMDB 이름 정리)", 'video'),
+    ("영상  (mkv 트랙, 자막, TVDB/TMDB 이름 정리)", 'video'),
     ("음원  (라이브러리 편입, 포맷 변환)", 'music'),
 ]
 

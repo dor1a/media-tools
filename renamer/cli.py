@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Terminal interface for the TMDB renamer.
+"""Terminal interface for the TVDB/TMDB renamer.
 
     python3 -m renamer.cli [folder]
 """
@@ -12,12 +12,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from renamer import core
 
 
-def pick(prompt, options, render):
+def pick(prompt, options, render, default=None):
     print()
     for i, o in enumerate(options, 1):
         print(f"  {i}. {render(o)}")
     while True:
-        raw = input(f"{prompt} (0=취소): ").strip()
+        suffix = f', 엔터={render(default)}' if default is not None else ''
+        raw = input(f"{prompt} (0=취소{suffix}): ").strip()
+        if not raw and default is not None:
+            return default
         if raw == '0':
             return None
         if raw.isdigit() and 1 <= int(raw) <= len(options):
@@ -25,20 +28,30 @@ def pick(prompt, options, render):
         print("  잘못된 입력입니다.")
 
 
-def run(base):
-    """Rename one folder using TMDB; the MKV tool can pass its current folder."""
-    base = os.path.abspath(os.path.expanduser(base))
+def _run(base):
+    """Preview one folder using the selected provider before asking to rename."""
+    base = core.existing_path(os.path.abspath(os.path.expanduser(base)))
     if not os.path.isdir(base):
         print(f"❌ 폴더가 없습니다: {base}")
         return 1
+
+    provider = pick('메타데이터', core.PROVIDERS, str, default='TVDB')
+    if provider is None:
+        return 0
+    numbering = 'season'
+    if provider == 'TVDB':
+        choice = pick('파일의 회차 기준', ['시즌별 회차', '누적 회차'], str, default='시즌별 회차')
+        if choice is None:
+            return 0
+        numbering = 'absolute' if choice == '누적 회차' else 'season'
 
     folder = os.path.basename(base)
     print(f"\n🔍 폴더명에서 추정: {folder}")
     title = input(f"제목 (엔터 시 '{folder}'): ").strip() or folder
 
     try:
-        results = core.search_series(title)
-    except core.TmdbError as e:
+        results = core.search_series(title, provider)
+    except core.MetadataError as e:
         print(f"❌ {e}")
         return 1
     if not results:
@@ -49,7 +62,7 @@ def run(base):
     if not series:
         return 1
     lang = series['original_language']
-    print(f"\n선택: {series['name']} (id={series['id']}, 언어={lang})")
+    print(f"\n선택: {series['name']} ({provider} id={series['id']}, 언어={lang})")
     print(f"파일명에 쓸 제목: {title}")
 
     mode = pick("시즌을 어떻게 정할까요?",
@@ -65,7 +78,9 @@ def run(base):
             print("❌ 시즌을 찾지 못했습니다. '시즌을 직접 선택'으로 해보세요.")
             return 1
     else:
-        seasons = core.list_seasons(series['id'])
+        seasons = core.list_seasons(series['id'], provider, lang)
+        if not seasons:
+            raise core.MetadataError('시즌 정보가 없습니다.')
         s = pick("시즌 선택", seasons,
                  lambda s: (f"{'Specials' if s['season_number'] == 0 else 'Season ' + str(s['season_number'])}"
                             f" — {s['episode_count']}화, 첫 방영 {s['air_date'] or '?'}"))
@@ -75,10 +90,9 @@ def run(base):
 
     total = []
     for directory, season in targets:
-        eps = core.episode_map(series['id'], season, lang)
+        eps = core.episode_map(series['id'], season, lang, provider, numbering)
         if not eps:
-            print(f"⚠️  시즌 {season}: TMDB 에 에피소드 정보가 없습니다. 건너뜁니다.")
-            continue
+            raise core.MetadataError(f'{provider}에 시즌 {season}의 회차 정보가 없습니다.')
         renames = core.plan(directory, title, season, eps)
         if not renames:
             print(f"⚠️  시즌 {season}: 대상 파일이 없습니다. ({os.path.basename(directory)})")
@@ -91,16 +105,28 @@ def run(base):
 
     if not total:
         print("\n변경할 파일이 없습니다.")
-        return 0
+        return 1
 
+    core.check_plan(total)
     if input(f"\n{len(total)}개를 변경할까요? (y/n): ").strip().lower() != 'y':
         print("취소했습니다.")
         return 0
 
     print()
-    for r, err in core.apply(total):
+    results = core.apply(total)
+    for r, err in results:
         print(f"  {'✅' if not err else '❌'} {r.new_name}" + (f"  {err}" if err else ""))
-    return 0
+    failed = sum(err is not None for _, err in results)
+    print(f'\n완료 {len(results) - failed}개, 실패 {failed}개')
+    return 1 if failed else 0
+
+
+def run(base):
+    try:
+        return _run(base)
+    except (core.MetadataError, core.RenameError, OSError) as error:
+        print(f'❌ {error}')
+        return 1
 
 
 def main():

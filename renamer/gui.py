@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tkinter interface for the TMDB renamer.
+"""Tkinter interface for the TVDB/TMDB renamer.
 
     python3 -m renamer.gui
 """
@@ -18,16 +18,19 @@ from renamer import core
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Media Renamer (TMDB)")
-        self.geometry("880x620")
+        self.title("Media Renamer (TVDB / TMDB)")
+        self.geometry("880x660")
         self.minsize(760, 520)
 
         self.series = None
         self.results = []
         self.seasons = []
         self.renames = []
+        self.generation = 0
 
         self._build()
+        self.dir_var.trace_add('write', lambda *_: self.invalidate())
+        self.title_var.trace_add('write', lambda *_: self.invalidate())
 
     # --- UI ---------------------------------------------------------------
 
@@ -41,12 +44,27 @@ class App(tk.Tk):
         ttk.Entry(top, textvariable=self.dir_var).pack(side='left', fill='x', expand=True, padx=6)
         ttk.Button(top, text="찾기…", command=self.choose_dir).pack(side='left')
 
+        source = ttk.Frame(self)
+        source.pack(fill='x', **pad)
+        ttk.Label(source, text='메타데이터').pack(side='left')
+        self.provider_var = tk.StringVar(value='TVDB')
+        provider_box = ttk.Combobox(source, textvariable=self.provider_var,
+                                    values=core.PROVIDERS, state='readonly', width=9)
+        provider_box.pack(side='left', padx=6)
+        provider_box.bind('<<ComboboxSelected>>', self.on_provider)
+        ttk.Label(source, text='파일의 회차 기준').pack(side='left', padx=6)
+        self.numbering_var = tk.StringVar(value='시즌별 회차')
+        self.numbering_box = ttk.Combobox(source, textvariable=self.numbering_var,
+                                         values=('시즌별 회차', '누적 회차'), state='readonly', width=16)
+        self.numbering_box.pack(side='left')
+        self.numbering_box.bind('<<ComboboxSelected>>', lambda _: self.invalidate())
+
         row = ttk.Frame(self)
         row.pack(fill='x', **pad)
         ttk.Label(row, text="제목").pack(side='left')
         self.title_var = tk.StringVar()
         ttk.Entry(row, textvariable=self.title_var).pack(side='left', fill='x', expand=True, padx=6)
-        ttk.Button(row, text="TMDB 검색", command=self.search).pack(side='left')
+        ttk.Button(row, text="검색", command=self.search).pack(side='left')
 
         ttk.Label(self, text="시리즈").pack(anchor='w', padx=8)
         self.series_box = ttk.Combobox(self, state='readonly')
@@ -62,6 +80,7 @@ class App(tk.Tk):
                         variable=self.mode_var, command=self.on_mode).pack(side='left', padx=12)
         self.season_box = ttk.Combobox(mode, state='disabled', width=34)
         self.season_box.pack(side='left')
+        self.season_box.bind('<<ComboboxSelected>>', lambda _: self.invalidate())
 
         ttk.Button(self, text="미리보기", command=self.preview).pack(**pad)
 
@@ -74,12 +93,31 @@ class App(tk.Tk):
 
         bottom = ttk.Frame(self)
         bottom.pack(fill='x', **pad)
-        self.status = ttk.Label(bottom, text="폴더를 고르고 TMDB 에서 시리즈를 검색하세요.")
+        self.status = ttk.Label(bottom, text="폴더와 메타데이터 제공자를 고르고 시리즈를 검색하세요.")
         self.status.pack(side='left')
         self.apply_btn = ttk.Button(bottom, text="이름 바꾸기", command=self.apply, state='disabled')
         self.apply_btn.pack(side='right')
 
     # --- helpers ----------------------------------------------------------
+
+    def invalidate(self):
+        self.generation += 1
+        self.renames = []
+        self.apply_btn.config(state='disabled')
+        self.tree.delete(*self.tree.get_children())
+
+    def on_provider(self, _=None):
+        self.invalidate()
+        self.series = None
+        self.results = []
+        self.seasons = []
+        self.series_box.set('')
+        self.series_box['values'] = []
+        self.season_box.set('')
+        self.season_box['values'] = []
+        self.numbering_var.set('시즌별 회차')
+        self.numbering_box.config(state='readonly' if self.provider_var.get() == 'TVDB' else 'disabled')
+        self.say('선택한 제공자에서 시리즈를 다시 검색하세요.')
 
     def say(self, text):
         self.status.config(text=text)
@@ -87,14 +125,23 @@ class App(tk.Tk):
 
     def run_bg(self, fn, done):
         """Keep network requests from blocking the window."""
+        generation = self.generation
+
+        def deliver(callback, value):
+            if generation == self.generation:
+                callback(value)
+
+        def failed(message):
+            messagebox.showerror('오류', message)
+            self.say('실패했습니다.')
+
         def worker():
             try:
                 result = fn()
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("오류", str(e)))
-                self.after(0, lambda: self.say("실패했습니다."))
+                self.after(0, lambda message=str(e): deliver(failed, message))
                 return
-            self.after(0, lambda: done(result))
+            self.after(0, lambda: deliver(done, result))
         threading.Thread(target=worker, daemon=True).start()
 
     # --- actions ----------------------------------------------------------
@@ -112,8 +159,17 @@ class App(tk.Tk):
         if not title:
             messagebox.showwarning("확인", "제목을 입력하세요.")
             return
-        self.say("TMDB 검색 중…")
-        self.run_bg(lambda: core.search_series(title), self._got_series)
+        self.invalidate()
+        self.series = None
+        self.seasons = []
+        self.results = []
+        self.series_box.set('')
+        self.series_box['values'] = []
+        self.season_box.set('')
+        self.season_box['values'] = []
+        provider = self.provider_var.get()
+        self.say(f'{provider} 검색 중…')
+        self.run_bg(lambda: core.search_series(title, provider), self._got_series)
 
     def _got_series(self, results):
         self.results = results
@@ -126,6 +182,10 @@ class App(tk.Tk):
         self.on_series()
 
     def on_series(self, _=None):
+        self.invalidate()
+        self.seasons = []
+        self.season_box.set('')
+        self.season_box['values'] = []
         i = self.series_box.current()
         if i < 0:
             return
@@ -135,6 +195,7 @@ class App(tk.Tk):
             self.load_seasons()
 
     def on_mode(self):
+        self.invalidate()
         if self.mode_var.get() == 'manual':
             self.season_box.config(state='readonly')
             if self.series:
@@ -156,21 +217,31 @@ class App(tk.Tk):
                 self.season_box.current(0)
             self.say("시즌을 고르세요.")
 
-        self.run_bg(lambda: core.list_seasons(self.series['id']), done)
+        series_id, lang = self.series['id'], self.series['original_language']
+        provider = self.provider_var.get()
+        self.run_bg(lambda: core.list_seasons(series_id, provider, lang), done)
 
     def preview(self):
+        self.invalidate()
         base = self.dir_var.get().strip()
         title = self.title_var.get().strip()
-        if not (base and os.path.isdir(base)):
+        if not base:
             messagebox.showwarning("확인", "폴더를 고르세요.")
             return
         if not self.series:
             messagebox.showwarning("확인", "시리즈를 먼저 검색·선택하세요.")
             return
 
+        try:
+            base = core.existing_path(os.path.abspath(os.path.expanduser(base)))
+            if not os.path.isdir(base):
+                raise NotADirectoryError(base)
+            detected = core.detect_seasons(base) if self.mode_var.get() == 'auto' else []
+        except OSError as error:
+            messagebox.showerror('오류', str(error))
+            return
         if self.mode_var.get() == 'auto':
-            targets = [(os.path.join(base, d) if d != '.' else base, n)
-                       for d, n in core.detect_seasons(base)]
+            targets = [(os.path.join(base, d) if d != '.' else base, n) for d, n in detected]
             if not targets:
                 messagebox.showinfo("결과", "시즌을 찾지 못했습니다. '시즌 직접 선택'을 써보세요.")
                 return
@@ -182,13 +253,18 @@ class App(tk.Tk):
             targets = [(base, self.seasons[i]['season_number'])]
 
         self.say("에피소드 정보 불러오는 중…")
+        series_id, lang = self.series['id'], self.series['original_language']
+        provider = self.provider_var.get()
+        numbering = 'absolute' if self.numbering_var.get() == '누적 회차' else 'season'
 
         def work():
             out = []
             for directory, season in targets:
-                eps = core.episode_map(self.series['id'], season, self.series['original_language'])
-                if eps:
-                    out += core.plan(directory, title, season, eps)
+                eps = core.episode_map(series_id, season, lang, provider, numbering)
+                if not eps:
+                    raise core.MetadataError(f'{provider}에 시즌 {season}의 회차 정보가 없습니다.')
+                out += core.plan(directory, title, season, eps)
+            core.check_plan(out)
             return out
 
         def done(renames):

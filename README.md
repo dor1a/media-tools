@@ -33,7 +33,7 @@ completion over directories. Spaces are not treated as separators, so
 
 | Menu | What it does |
 | --- | --- |
-| 이름 정리 (TMDB) | hands the same folder to the renamer below — first because it is the one used most |
+| 이름 정리 (TVDB/TMDB) | hands the same folder to the renamer below — first because it is the one used most |
 | 트랙 정보 보기 | video, audio and subtitle tracks per file |
 | 오디오 언어 검사 | reports files whose first audio track is not the expected language |
 | 오디오 언어 변경 | `mkvpropedit`, no remux |
@@ -58,27 +58,43 @@ the same split as the other two packages.
 
 ## renamer
 
-Renames episodes from TMDB metadata into
+Renames TV episodes using TVDB or TMDB metadata:
 
 ```
 [2022-09-28] 원제 - S01E05 - 에피소드제목.mkv
 ```
 
-Illegal characters become their full-width forms (`:` → `：`, `?` → `？`), and
-subtitles get `.kor` inserted before the extension.
+Illegal characters become their full-width forms (`:` → `：`, `?` → `？`).
+New names use NFC; subtitles get one `.kor` before the extension.
 
 ```bash
-cp .env.example .env      # then put your TMDB key in it
+cp -n .env.example .env   # first setup; preserves an existing .env
 pip install -r requirements.txt
 ```
 
-Reachable from the mkv menu as 이름 정리 (TMDB), which is usually what you
-want since the folder is already chosen. It also stands on its own:
+Set `TVDB_API_KEY` and/or `TMDB_API_KEY` in the repo's ignored `.env`.
+Only the selected provider needs a key. Existing environment variables take
+precedence. Leave `TVDB_PIN` empty unless your TVDB key requires a subscriber
+PIN. TVDB authentication tokens stay in process memory.
+
+Reachable from the mkv menu as 이름 정리 (TVDB/TMDB), with the folder already
+chosen. It also stands on its own:
 
 ```bash
 python3 -m renamer.cli "/path/to/series"
 python3 -m renamer.gui
 ```
+
+Both interfaces offer **TVDB / TMDB**, defaulting to TVDB. Choose the source
+before searching. In the GUI, changing providers clears the previous series,
+season and preview so IDs from one service cannot be used with the other.
+
+TVDB also offers **시즌별 회차 / 누적 회차**. These read the default order's
+`number` and `absoluteNumber`, respectively; neither invents episode numbers.
+Some year-based seasons already use cumulative values in `number`—Running
+Man's 2024 season currently has 686–733. Specials always use their own episode
+numbers. If TVDB lacks absolute numbers, use 시즌별 회차 and matching source
+filenames. TMDB uses its season episode numbers.
 
 Rename last. The renamer inserts `.kor` into subtitle names, and 자막 넣기
 looks for `<name>.kor.srt` — do it the other way round and the names no
@@ -87,11 +103,35 @@ longer line up.
 Seasons are found either way:
 
 - **자동 감지** — reads the folder layout (`Season 01`, `Specials`, or the
-  `S##E##` in the files) and does every season it finds
-- **직접 선택** — you pick one season from TMDB
+  season/episode code in the files) and does every season it finds
+- **직접 선택** — you pick one season from the selected provider
 
-`core.py` holds the lookups and the naming rules and knows nothing about
-either front end, which is why the CLI and the GUI cannot drift apart.
+Codes such as `S2024E686`, `S01E123` and `S00E04` retain their full numbers.
+Combined episodes such as `S01E01E02` are rejected. TVDB titles use the series'
+original language, with English fallback for missing translations. A matching
+file without an episode, title or air date stops the preview.
+
+Review the preview before applying. The renamer checks destination collisions
+and source identity, size, ownership, mode and modification time before
+renaming, then checks those attributes afterward. These checks do not hash
+the media. Filesystem errors can leave a partially renamed batch; errors are
+reported and the CLI returns a nonzero status, without automatic rollback.
+When an original path is missing, it retries its NFC form for SMB access.
+
+Series-folder naming, movie naming, resolution tags and custom mappings
+between broadcast years and provider seasons are still outside this tool.
+`core.py` shares lookup and naming rules between both interfaces; `tvdb.py`
+handles TVDB authentication and paginated episode retrieval.
+
+Metadata provided by [TheTVDB](https://thetvdb.com/). Please consider adding
+missing information or subscribing. See the [TVDB API documentation](https://thetvdb.github.io/v4-api/).
+
+Offline tests cover provider selection, pagination, GUI state changes,
+filename preservation, collisions and failures:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## music
 

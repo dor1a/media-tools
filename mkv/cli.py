@@ -191,7 +191,7 @@ def act_drop_audio(mkvs):
 
 
 def act_rename(mkvs):
-    """Rename using TMDB, importing the requests-dependent renamer on demand.
+    """Rename using TVDB/TMDB, importing the renamer on demand.
 
     Users of the MKV operations alone do not need that dependency.
     """
@@ -200,12 +200,12 @@ def act_rename(mkvs):
     except ImportError as e:
         print(f"\n❌ renamer 를 불러오지 못했습니다: {e}")
         print("   uv pip install -r requirements.txt")
-        return
-    renamer_cli.run(os.path.dirname(mkvs[0]))
+        return 1
+    return renamer_cli.run(os.path.dirname(mkvs[0]))
 
 
 ACTIONS = [
-    ("이름 정리 (TMDB)", act_rename),
+    ("이름 정리 (TVDB/TMDB)", act_rename),
     ("트랙 정보 보기", act_info),
     ("오디오 언어 검사", act_check_audio),
     ("오디오 언어 변경", act_set_audio),
@@ -227,16 +227,23 @@ def main(path_arg=None):
     if not mkvs:
         return 1
 
+    result = 0
     while True:
         choice = pick("\n무엇을 할까요? (0=종료)", [n for n, _ in ACTIONS], allow_exit=True)
         if choice is None:
-            return 0
+            return result
         for name, fn in ACTIONS:
             if name == choice:
-                fn(mkvs)
+                action_result = fn(mkvs)
+                if action_result:
+                    result = action_result
+                mkvs = core.mkvs_in(path)
                 break
         if input("\n계속할까요? (y/n): ").strip().lower() != 'y':
-            return 0
+            return result
+        if not mkvs:
+            print('처리할 mkv 파일이 없습니다.')
+            return result or 1
 
 
 if __name__ == '__main__':
