@@ -396,3 +396,18 @@ which turns `다시 만난 날` into `?? ?? ?`; sampled existing Korean v1 title
 instead decoded correctly as CP949. This is a writing policy, not a claim
 that readers ignore v1: by default, Mutagen can supplement missing ID3v2
 frames with values from ID3v1.
+
+## Data sources
+
+Episode metadata comes from [TheTVDB](https://thetvdb.com) and
+[The Movie Database](https://www.themoviedb.org). Music lookups use Apple's
+iTunes Search API.
+
+Metadata provided by TheTVDB. Please consider adding missing information or
+subscribing.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
