@@ -57,9 +57,14 @@ def _fields(track, album=None, artist=None, genre=None):
     Otherwise a filename containing `(feat. Noa)` would have `feat. Noa` in
     `TIT2`. All 161 library tracks with `(feat.` in their filenames also had
     parentheses in `TIT2` when checked on 2026-09-11.
+
+    Multi-disc positions are `n/total`, like the track number. The library
+    stores them as `1/2` in both `TPOS` and APE `DISCNUMBER`, and single-disc
+    albums have no disc number (all MP3s checked on 2026-10-25).
     """
     total = track.get('trackCount') or (album or {}).get('trackCount') or ''
     num = track.get('trackNumber', 1)
+    discs = track.get('discCount') or 1
     name = artist or track.get('artistName', '')
     return {
         'title': core.wrap_feat(track.get('trackName', '')),
@@ -67,8 +72,8 @@ def _fields(track, album=None, artist=None, genre=None):
         'artist': name,
         'albumartist': artist or (album or {}).get('artistName') or track.get('artistName', ''),
         'track': f"{num}/{total}" if total else str(num),
-        'disc': str(track.get('discNumber', 1)),
-        'multidisc': (track.get('discCount') or 1) > 1,
+        'disc': f"{track.get('discNumber') or 1}/{discs}",
+        'multidisc': discs > 1,
         'date': (track.get('releaseDate') or '')[:4],
         'genre': genre or track.get('primaryGenreName', ''),
     }
@@ -113,6 +118,8 @@ def _write_mp3(path, f, cover):
         ape['ALBUM'], ape['YEAR'] = f['album'], f['date']
         ape['TRACK'], ape['GENRE'] = f['track'], f['genre']
         ape['Album Artist'] = f['albumartist']
+        if f['multidisc']:
+            ape['DISCNUMBER'] = f['disc']
         if cover:
             ape['Cover Art (Front)'] = APEValue(b'Cover Art (Front).jpg\x00' + cover, BINARY)
         ape.save(path)

@@ -38,9 +38,11 @@ VARIOUS = 'various artists'
 # Search catalogs can be empty in regions without iTunes music sales, even
 # when lookup returns the same tracks. Do not mistake zero search results for
 # missing tracks. On 2026-09-05, kr returned no results for `BTS`, IU's Korean
-# name, or `Wheesung`.
+# name, or `Wheesung`. On 2026-10-31, cn returned none for `周杰倫` or
+# `Taylor Swift`, while tw returned both.
 EMPTY_SEARCH_STORES = {
     'kr': '한국은 iTunes 음원을 안 팔아서 검색 카탈로그가 비어 있어. jp 나 us 로 찾아봐.',
+    'cn': '중국 스토어도 검색 카탈로그가 비어 있어. 중국어 곡은 tw 로 찾아봐.',
 }
 
 
@@ -114,6 +116,19 @@ def sanitize(name):
     return name.strip()
 
 
+TRAILING_DOTS = re.compile(r'\.+$')
+
+
+def folder_name(name):
+    """Sanitize a folder name and turn its trailing dots into full-width dots.
+
+    Windows does not support folder names that end in a period. The library
+    writes `Summer．` and had no folder ending in `.` on 2026-10-31. Filenames
+    keep their dots because the extension follows them (`L.O.V.E..mp3`).
+    """
+    return TRAILING_DOTS.sub(lambda m: '．' * len(m.group()), sanitize(name))
+
+
 def album_type(album):
     """Return the type folder, or None for a flat Various Artists layout.
 
@@ -149,7 +164,7 @@ def release_folder(album, full_date=True):
         stamp = iso.replace('-', '.')
     else:
         stamp = iso[:4] or '연도미상'
-    return f"[{stamp}] {sanitize(album.get('collectionName') or '')}"
+    return f"[{stamp}] {folder_name(album.get('collectionName') or '')}"
 
 
 # Match trailing featured-artist credits. Exclude `ft.` because library titles
@@ -208,7 +223,7 @@ def destination(base, genre, album, track, ext, full_date=True, type_folder=...,
     automatically to the library's categories (J-Pop / Utaite / Melody …).
     """
     kind = album_type(album) if type_folder is ... else type_folder
-    parts = [str(base), sanitize(genre), sanitize(artist_folder(album, source))]
+    parts = [str(base), folder_name(genre), folder_name(artist_folder(album, source))]
     if kind:
         parts.append(kind)
     parts += [release_folder(album, full_date), track_file(track, ext)]

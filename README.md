@@ -234,7 +234,8 @@ carries to the next file.
 `kr` is a trap worth knowing: Korea has Apple Music but no iTunes Store, so
 its search catalogue is empty and every query returns nothing. The songs are
 there — looking one up by id works — but they have to be found through `jp`
-or `us`, where a Korean artist may be spelled in Latin.
+or `us`, where a Korean artist may be spelled in Latin. `cn` is empty in the
+same way, and Chinese songs are found through `tw`.
 
 What the type proposal reads:
 
@@ -249,6 +250,9 @@ What the type proposal reads:
 Album names keep their characters. Illegal ones take their full-width forms,
 the same as the renamer, rather than being dropped: the old script stripped
 anything non-alphanumeric and turned `Bird & Insect` into `Bird  Insect`.
+A folder name that ends in dots takes full-width ones (`Summer．`), because
+Windows does not support a trailing dot. File names keep theirs, since the
+extension comes after them.
 
 A trailing `feat. …` gets wrapped in parentheses, because the library writes
 it that way — 159 of its 170 credits are `(feat. …)` and none are bare. What
@@ -259,6 +263,10 @@ the middle of a title, which is a remix credit rather than a feature.
 `core.py` holds the lookups and the path rules, `tags.py` writes ID3v2.4 +
 APEv2 + FLAC with cover art, and `cli.py` is the only part that asks
 questions. Eight scripts used to carry copies of the first two between them.
+
+A multi-disc album gets its disc as `1/2` in `TPOS`, APE `DISCNUMBER` and
+FLAC `DISCNUMBER`, the way the library has it. A single disc gets none.
+`tests/test_music.py` checks these path and tag rules offline.
 
 ## unify
 
