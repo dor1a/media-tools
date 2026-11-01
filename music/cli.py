@@ -19,7 +19,7 @@ from music import core
 
 # Top-level library categories cannot be inferred from iTunes genres. Apple
 # has no Utaite or Melody equivalent, and Anime vs. J-Pop is a personal choice.
-GENRES = ['J-Pop', 'K-Pop', 'C-Pop', 'Pop', 'Anime', 'Game', 'Utaite', 'Melody']
+GENRES = ['J-Pop', 'K-Pop', 'C-Pop', 'Pop', 'EDM', 'Anime', 'Game', 'Utaite', 'Melody']
 
 
 def _width(text):
@@ -108,6 +108,33 @@ def ask_country(current=None):
     return pick("스토어", core.COUNTRY_CODES, str, default=current or 'jp')
 
 
+TYPE_IN = '직접 입력'
+
+
+def pick_style(default=None):
+    """Pick an English genre tag from the list, or type one in English."""
+    choice = pick("장르 태그", core.GENRE_TAGS + [TYPE_IN], str, default=default)
+    while choice == TYPE_IN:
+        raw = input("  장르 태그 (영어로): ").strip()
+        if raw and raw.isascii():
+            return raw
+        print("  장르 태그는 영어로만 넣어.")
+    return choice
+
+
+def ask_style(album):
+    """Offer the store's genre in English as the album's tag, or pick another."""
+    store = album.get('primaryGenreName') or ''
+    suggested = core.genre_tag(store)
+    if not suggested:
+        print(f"\n  스토어 장르 '{store or '없음'}' 는 영어로 못 바꿔서 골라야 해.")
+        return pick_style()
+    print(f"\n  장르 태그는 {suggested} 로 볼게 (스토어: {store}).")
+    if input("  그대로 쓸까? (엔터=응, n=고르기): ").strip().lower() == 'n':
+        return pick_style(suggested)
+    return suggested
+
+
 def _norm(text):
     """Normalize to NFC, lowercase, and remove spaces and symbols for comparison.
 
@@ -132,9 +159,10 @@ def best_track(tracks, filename):
 def choose_album(f, country, genre):
     """Search using one file and select its album, type, and track list.
 
-    Return (album, kind, tracks, country, genre), including any store or genre
-    changes. Folders commonly mix Japanese and Korean songs, so both settings
-    must be adjustable per album rather than only per run.
+    Return (album, kind, tracks, country, genre, style), including any store or
+    bucket changes. Folders commonly mix Japanese and Korean songs, so both
+    settings must be adjustable per album rather than only per run. `style` is
+    the album's English genre tag, chosen apart from the folder bucket.
     """
     query = core.guess_query(f)
     rule(f'🔍 {query}')
@@ -154,7 +182,7 @@ def choose_album(f, country, genre):
 
         raw = input(f"앨범 (0=건너뜀, s=스토어, g=장르, 지금 {country} / {genre}): ").strip().lower()
         if raw == '0':
-            return None, None, None, country, genre
+            return None, None, None, country, genre, None
         if raw == 's':
             country = ask_country(country) or country
             continue
@@ -173,19 +201,20 @@ def choose_album(f, country, genre):
     else:
         kind = suggested
 
-    return album, kind, core.album_tracks(album['collectionId'], country), country, genre
+    style = ask_style(album)
+    return album, kind, core.album_tracks(album['collectionId'], country), country, genre, style
 
 
 def plan_moves(files, base, country, genre, full_date):
     """Search per file, with an option to reuse one album for the whole folder."""
     moves = []
-    album = kind = tracks = None
+    album = kind = tracks = style = None
     reuse = False
     asked_reuse = False
 
     for f in files:
         if not reuse:
-            album, kind, tracks, country, genre = choose_album(f, country, genre)
+            album, kind, tracks, country, genre, style = choose_album(f, country, genre)
             if album is None:
                 print(f"  건너뜀: {f.name}")
                 continue
@@ -205,7 +234,7 @@ def plan_moves(files, base, country, genre, full_date):
                              full_date=full_date, type_folder=kind, source=f),
             track,
             core.artist_folder(album, f),
-            genre,
+            style,
         ))
 
         # Whole-album downloads are common. Offer reuse once to avoid repeated
@@ -309,7 +338,7 @@ def confirm_and_apply(moves):
     """Show the plan, accept exclusions, and move the remaining files."""
     rule('계획')
     for i, m in enumerate(moves, 1):
-        print(f"  {i}. {m.src.name}\n     → {m.dst}")
+        print(f"  {i}. {m.src.name}\n     → {m.dst}  [장르 태그: {m.genre or '없음'}]")
 
     raw = input("\n뺄 번호 (쉼표로, 없으면 엔터): ").strip()
     if raw:
@@ -393,7 +422,7 @@ def run_auto(files, source):
         moves.append(core.Move(
             f, core.destination(base, genre, album, hit, f.suffix,
                                full_date=full_date, source=f), hit,
-            core.artist_folder(album, f), genre))
+            core.artist_folder(album, f), core.genre_tag(hit.get('primaryGenreName'))))
 
     if misses:
         print(f"\n검색 결과 없음 {len(misses)}개 (그대로 둡니다):")

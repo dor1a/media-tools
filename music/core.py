@@ -28,6 +28,29 @@ SANITIZE_MAP = {
 
 TYPES = ['Albums', 'Singles & EPs', 'Compilations', 'Live Albums', 'Indies']
 
+# The genre tag names the style, in English and one per track. The folder
+# bucket is a separate, coarser choice and is never written into the tag.
+# This list is what the library and its older backup used on 2026-10-31, plus
+# the Epidemic Sound styles the Hallman releases brought in on 2026-11-01.
+GENRE_TAGS = [
+    'Pop', 'Dance Pop', 'Ballad', 'Rock', 'Alternative', 'Indie Rock', 'Punk',
+    'Heavy Metal', 'R&B', 'Hip-Hop/Rap', 'Country', 'Folk', 'Blues', 'Jazz',
+    'Reggae', 'J-Pop', 'K-Pop', 'C-Pop', 'Utaite', 'Vocaloid', 'Soundtrack', 'New Age',
+    'Electronic', 'Electronica', 'Dance', 'Eurodance', 'Lounge',
+    'House', 'Soft House', 'Progressive House', 'Melodic House', 'Tropical House',
+    'Deep House', 'Future House', 'Electro House', 'Slap House', 'Big Room House',
+    'Tech House', 'Bass House', 'Electro', 'Melodic Techno', 'Future Bass', 'Glitch Hop',
+    'Eurobeat',
+]
+
+# Names follow iTunes, and stores answer in their own language. The older
+# `OST` and `Hip Hop/Rap` tags map to the iTunes spelling (decision
+# 2026-10-31). Other non-English names are picked by hand.
+GENRE_ALIASES = {
+    'OST': 'Soundtrack', 'Hip Hop/Rap': 'Hip-Hop/Rap',
+    'ロック': 'Rock', 'R&B／ソウル': 'R&B',
+}
+
 # Infer live and best-of releases from album titles because iTunes does not
 # label them separately. These matches are suggestions for the user to review.
 LIVE_MARKERS = ('(live)', '[live]', ' - live', 'ライブ', '라이브', 'live at ', 'live in ')
@@ -127,6 +150,13 @@ def folder_name(name):
     keep their dots because the extension follows them (`L.O.V.E..mp3`).
     """
     return TRAILING_DOTS.sub(lambda m: '．' * len(m.group()), sanitize(name))
+
+
+def genre_tag(name):
+    """Return the English genre tag for a store genre, or None to pick one instead."""
+    name = (name or '').strip()
+    name = GENRE_ALIASES.get(name, name)
+    return name if name and name.isascii() else None
 
 
 def album_type(album):
@@ -300,7 +330,7 @@ class Move:
     dst: Path
     track: dict
     artist: str = ''
-    genre: str = ''
+    genre: str = ''  # English genre tag; the folder bucket is already in dst
 
 
     @property

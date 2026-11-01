@@ -209,11 +209,17 @@ The store and the genre are both per album rather than per run, since a
 folder of singles is rarely all one thing — `s` and `g` at the album prompt
 change them and the choice carries to the next file.
 
-Two levels are yours to pick, because the metadata cannot supply them:
+Three things are yours to pick, because the metadata cannot settle them:
 
 - **장르** — the top bucket. Apple's genre does not map onto J-Pop / Utaite /
   Melody, and whether an artist is Anime or J-Pop is a judgement about this
   library rather than about the music
+- **장르 태그** — the style written into the file, one per track and always in
+  English and spelled the way iTunes spells it (Progressive House, New Age,
+  Soundtrack, Ballad …). The bucket never goes into the tag. The store's genre
+  is offered first, translated where the store answers in its own language
+  (`ロック` → `Rock`). A name that cannot be put into English has to be picked
+  from the list or typed in
 - **타입** — proposed, then confirmable. `Indies` never gets proposed since no
   external source knows about it
 
@@ -266,6 +272,13 @@ questions. Eight scripts used to carry copies of the first two between them.
 
 A multi-disc album gets its disc as `1/2` in `TPOS`, APE `DISCNUMBER` and
 FLAC `DISCNUMBER`, the way the library has it. A single disc gets none.
+
+The cover goes in APIC only, and a cover found in APE is dropped. APE sits at
+the end of the file, and ffmpeg counts it as audio: once it passes 1/16 of
+the audio bytes, ffmpeg ignores the frame count in the Info header and
+guesses the length from the bitrate. A 2:56 track with a 3.5 MB cover there
+read as 4:24.
+
 `tests/test_music.py` checks these path and tag rules offline.
 
 ## unify

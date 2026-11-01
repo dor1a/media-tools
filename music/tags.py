@@ -7,7 +7,7 @@ block can be read directly from the JPEG header.
 from pathlib import Path
 
 import requests
-from mutagen.apev2 import APEv2, APEValue, BINARY, error as APEv2Error
+from mutagen.apev2 import APEv2, error as APEv2Error
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, APIC, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK
 
@@ -48,10 +48,12 @@ def _jpeg_size(data):
 
 
 def _fields(track, album=None, artist=None, genre=None):
-    """Build tag values, overriding artist and genre with the folder values.
+    """Build tag values, overriding the artist with the folder value.
 
     Raw search results can disagree with the folder: a Korean artist name may
-    become `Wheesung`, and a `K-Pop` folder may receive a localized R&B genre.
+    become `Wheesung`. The genre is the English style chosen for the album, not
+    the folder bucket. Without one, the store's genre is used once `genre_tag`
+    has mapped it to English, and a name it cannot map leaves the tag empty.
 
     Titles also pass through `wrap_feat` to match filenames from `track_file`.
     Otherwise a filename containing `(feat. Noa)` would have `feat. Noa` in
@@ -75,7 +77,7 @@ def _fields(track, album=None, artist=None, genre=None):
         'disc': f"{track.get('discNumber') or 1}/{discs}",
         'multidisc': discs > 1,
         'date': (track.get('releaseDate') or '')[:4],
-        'genre': genre or track.get('primaryGenreName', ''),
+        'genre': genre or core.genre_tag(track.get('primaryGenreName')) or '',
     }
 
 
@@ -88,7 +90,8 @@ def _write_mp3(path, f, cover):
     tag['TPE1'] = TPE1(encoding=3, text=f['artist'])
     tag['TPE2'] = TPE2(encoding=3, text=f['albumartist'])
     tag['TRCK'] = TRCK(encoding=3, text=f['track'])
-    tag['TCON'] = TCON(encoding=3, text=f['genre'])
+    if f['genre']:
+        tag['TCON'] = TCON(encoding=3, text=f['genre'])
     tag['TDRC'] = TDRC(encoding=3, text=f['date'])
     if f['multidisc']:
         tag['TPOS'] = TPOS(encoding=3, text=f['disc'])
@@ -106,8 +109,12 @@ def _write_mp3(path, f, cover):
     #
     # Match the casing of the library's mp3tag keys. Mutagen treats APE keys
     # case-insensitively, but stored spelling should still match the library.
-    # The album artist key is `Album Artist`, including the space. The library
-    # also keeps a cover here independently of APIC, as `<filename>\0<JPEG>`.
+    # The album artist key is `Album Artist`, including the space.
+    #
+    # The cover goes in APIC only (decision: 2026-11-01). APE sits at the end
+    # of the file and ffmpeg counts it as audio. Once it passes 1/16 of the
+    # audio bytes, ffmpeg drops the Info frame count and guesses the length
+    # from the bitrate. `clear()` also removes a cover mp3tag left here.
     try:
         try:
             ape = APEv2(path)
@@ -116,12 +123,12 @@ def _write_mp3(path, f, cover):
             ape = APEv2()
         ape['TITLE'], ape['ARTIST'] = f['title'], f['artist']
         ape['ALBUM'], ape['YEAR'] = f['album'], f['date']
-        ape['TRACK'], ape['GENRE'] = f['track'], f['genre']
+        ape['TRACK'] = f['track']
+        if f['genre']:
+            ape['GENRE'] = f['genre']
         ape['Album Artist'] = f['albumartist']
         if f['multidisc']:
             ape['DISCNUMBER'] = f['disc']
-        if cover:
-            ape['Cover Art (Front)'] = APEValue(b'Cover Art (Front).jpg\x00' + cover, BINARY)
         ape.save(path)
     except Exception as e:
         print(f"  APEv2 건너뜀: {Path(path).name} — {e}")
@@ -132,7 +139,10 @@ def _write_flac(path, f, cover):
     audio['title'], audio['album'] = f['title'], f['album']
     audio['artist'], audio['albumartist'] = f['artist'], f['albumartist']
     audio['tracknumber'], audio['date'] = f['track'], f['date']
-    audio['genre'] = f['genre']
+    if f['genre']:
+        audio['genre'] = f['genre']
+    elif 'genre' in audio:
+        del audio['genre']
     if f['multidisc']:
         audio['discnumber'] = f['disc']
     if cover:
