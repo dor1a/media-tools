@@ -231,6 +231,11 @@ carries the spelling you chose. Compilations are the exception: there the
 name in the file is the track's artist, not the album's, so Various Artists
 stands.
 
+The jp store also splits some Japanese names with a space (`清水 翔太`,
+`まつむら かなう`). The library writes them joined, so the folder and both
+artist tags close any space between two kanji or kana. Hangul names and
+comma-separated artists keep their spaces.
+
 The store matters: the same album comes back with different readings and
 release dates depending on where you ask. It is chosen per album rather than
 per run, since a folder holding both Japanese and Korean songs is the normal

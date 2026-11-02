@@ -51,7 +51,9 @@ def _fields(track, album=None, artist=None, genre=None):
     """Build tag values, overriding the artist with the folder value.
 
     Raw search results can disagree with the folder: a Korean artist name may
-    become `Wheesung`. The genre is the English style chosen for the album, not
+    become `Wheesung`. Both artist tags go through `core.artist_name`, so a
+    name the jp store splits (`清水 翔太`) is written joined like its folder.
+    The genre is the English style chosen for the album, not
     the folder bucket. Without one, the store's genre is used once `genre_tag`
     has mapped it to English, and a name it cannot map leaves the tag empty.
 
@@ -67,12 +69,12 @@ def _fields(track, album=None, artist=None, genre=None):
     total = track.get('trackCount') or (album or {}).get('trackCount') or ''
     num = track.get('trackNumber', 1)
     discs = track.get('discCount') or 1
-    name = artist or track.get('artistName', '')
+    name = core.artist_name(artist or track.get('artistName', ''))
     return {
         'title': core.wrap_feat(track.get('trackName', '')),
         'album': track.get('collectionName', ''),
         'artist': name,
-        'albumartist': artist or (album or {}).get('artistName') or track.get('artistName', ''),
+        'albumartist': core.artist_name(artist or (album or {}).get('artistName') or track.get('artistName', '')),
         'track': f"{num}/{total}" if total else str(num),
         'disc': f"{track.get('discNumber') or 1}/{discs}",
         'multidisc': discs > 1,

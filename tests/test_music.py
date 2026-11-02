@@ -55,6 +55,38 @@ class FolderNameTests(unittest.TestCase):
         self.assertEqual(path.parts[3], 'Example Inc．')
 
 
+class ArtistNameTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        artwork = patch.object(tags, '_artwork', return_value=None)
+        artwork.start()
+        self.addCleanup(artwork.stop)
+
+    def test_split_japanese_names_are_joined(self):
+        self.assertEqual(core.artist_name('清水 翔太'), '清水翔太')
+        self.assertEqual(core.artist_name('まつむら かなう'), 'まつむらかなう')
+        self.assertEqual(core.artist_name('中\u3000孝介'), '中孝介')
+        self.assertEqual(core.artist_name('Iggy Azalea '), 'Iggy Azalea')
+
+    def test_other_spaces_stay(self):
+        for name in ('버스커 버스커', '雨宮天, 高橋李依, 茅野愛衣', 'SEKAI NO OWARI', 'stb, Rio & こぴ'):
+            self.assertEqual(core.artist_name(name), name)
+
+    def test_folder_and_tags_use_the_joined_name(self):
+        t = track(artist='清水 翔太')
+        album = core.as_album(t)
+        path = core.destination('/lib', 'J-Pop', album, t, '.mp3')
+        self.assertEqual(path.parts[3], '清水翔太')
+        mp3 = self.dir / 'a.mp3'
+        mp3.write_bytes(MP3_BYTES)
+        tags.apply_tags(mp3, t, album)
+        self.assertEqual(ID3(mp3)['TPE1'].text, ['清水翔太'])
+        self.assertEqual(ID3(mp3)['TPE2'].text, ['清水翔太'])
+        self.assertEqual(str(APEv2(mp3)['ARTIST']), '清水翔太')
+
+
 class StoreTests(unittest.TestCase):
     def test_cn_points_to_tw(self):
         self.assertEqual(set(core.EMPTY_SEARCH_STORES), {'kr', 'cn'})

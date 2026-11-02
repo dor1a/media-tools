@@ -139,6 +139,21 @@ def sanitize(name):
     return name.strip()
 
 
+CJK = '\u3005\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff'
+CJK_GAP = re.compile(f'(?<=[{CJK}])[ \u3000]+(?=[{CJK}])')
+
+
+def artist_name(name):
+    """Join a Japanese name that a store split with a space, and trim the ends.
+
+    The jp store returns `清水 翔太`, `中 孝介` and `まつむら かなう`, while the
+    library writes them joined (2026-11-02). Only a gap between two kanji or
+    kana closes, so Hangul names (`버스커 버스커`) and comma lists
+    (`雨宮天, 高橋李依`) keep their spaces.
+    """
+    return CJK_GAP.sub('', name or '').strip()
+
+
 TRAILING_DOTS = re.compile(r'\.+$')
 
 
@@ -236,13 +251,13 @@ def artist_folder(album, source=None):
     Compilations are an exception: filenames identify track artists rather
     than the album artist.
     """
-    itunes = (album.get('artistName') or '').strip()
+    itunes = artist_name(album.get('artistName'))
     if itunes.lower() == VARIOUS:
         return itunes
     if source:
         head, sep, _ = stem_nfc(source).partition(' - ')
         if sep and head.strip():
-            return head.strip()
+            return artist_name(head)
     return itunes
 
 
