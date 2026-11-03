@@ -1,5 +1,6 @@
 """iTunes lookups and music library path rules. UI lives in cli.py."""
 
+import functools
 import os
 import re
 import unicodedata
@@ -121,9 +122,24 @@ def first_match(query, country='jp'):
 
 
 def album_tracks(collection_id, country='jp'):
-    """Return album tracks, filtering out the album record returned by lookup."""
+    """Return album tracks, each dated by the release rather than by itself.
+
+    Lookup also returns the album record, which is filtered out here. A track
+    carries its own first-release date, so a 1996 song on a 2020 compilation
+    says 1996. One release keeps one date, the one in its folder (decision
+    2026-10-31).
+    """
     rows = _get('/lookup', id=collection_id, entity='song', country=country)
-    return [t for t in rows if t.get('kind') == 'song' and t.get('trackName')]
+    release = next((r.get('releaseDate') for r in rows if r.get('wrapperType') == 'collection'), None)
+    tracks = [t for t in rows if t.get('kind') == 'song' and t.get('trackName')]
+    return [dict(t, releaseDate=release) for t in tracks] if release else tracks
+
+
+@functools.lru_cache(maxsize=None)
+def release_date(collection_id, country='jp'):
+    """Return a collection's own release date, or '' when lookup has none."""
+    rows = _get('/lookup', id=collection_id, country=country)
+    return next((r.get('releaseDate') or '' for r in rows if r.get('wrapperType') == 'collection'), '')
 
 
 # --- Path rules --------------------------------------------------------------

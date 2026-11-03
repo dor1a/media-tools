@@ -202,7 +202,11 @@ def choose_album(f, country, genre):
         kind = suggested
 
     style = ask_style(album)
-    return album, kind, core.album_tracks(album['collectionId'], country), country, genre, style
+    tracks = core.album_tracks(album['collectionId'], country)
+    if tracks:
+        # Search results carry the matched track's date; the folder takes the release's.
+        album = dict(album, releaseDate=tracks[0]['releaseDate'])
+    return album, kind, tracks, country, genre, style
 
 
 def plan_moves(files, base, country, genre, full_date):
@@ -418,6 +422,7 @@ def run_auto(files, source):
         if not hit:
             misses.append(f)
             continue
+        hit = dict(hit, releaseDate=core.release_date(hit['collectionId'], country) or hit.get('releaseDate', ''))
         album = core.as_album(hit)
         moves.append(core.Move(
             f, core.destination(base, genre, album, hit, f.suffix,

@@ -229,7 +229,13 @@ The artist folder comes from the file name when it is written
 `휘성`, and its K-Pop folders are all in Korean. The file name already
 carries the spelling you chose. Compilations are the exception: there the
 name in the file is the track's artist, not the album's, so Various Artists
-stands.
+stands. In the tags it is the album artist only, and each track keeps its
+singer as the track artist.
+
+Every track of a release gets the release's date, the same one its folder
+shows. iTunes dates each track by its own first release, so a 1996 song on a
+2020 compilation comes back as 1996, and an album that gathers earlier
+singles would otherwise carry several years.
 
 The jp store also splits some Japanese names with a space (`清水 翔太`,
 `まつむら かなう`). The library writes them joined, so the folder and both

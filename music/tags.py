@@ -65,11 +65,15 @@ def _fields(track, album=None, artist=None, genre=None):
     Multi-disc positions are `n/total`, like the track number. The library
     stores them as `1/2` in both `TPOS` and APE `DISCNUMBER`, and single-disc
     albums have no disc number (all MP3s checked on 2026-10-25).
+
+    A `Various Artists` folder names the album artist only. The track artist
+    stays the singer, as in all 57 compilation MP3s checked on 2026-11-03.
     """
     total = track.get('trackCount') or (album or {}).get('trackCount') or ''
     num = track.get('trackNumber', 1)
     discs = track.get('discCount') or 1
-    name = core.artist_name(artist or track.get('artistName', ''))
+    various = (artist or '').strip().lower() == core.VARIOUS
+    name = core.artist_name(track.get('artistName', '') if various else artist or track.get('artistName', ''))
     return {
         'title': core.wrap_feat(track.get('trackName', '')),
         'album': track.get('collectionName', ''),

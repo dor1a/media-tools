@@ -202,5 +202,38 @@ class GenreTagTests(unittest.TestCase):
                 self.assertEqual(cli.ask_style({'primaryGenreName': 'ダンス'}), 'Future Bass')
 
 
+class CompilationTests(unittest.TestCase):
+    """A 1996 song on a 2020 Various Artists album, as iTunes returns it."""
+
+    ROWS = [
+        {'wrapperType': 'collection', 'collectionId': 1, 'collectionName': 'EVANGELION FINALLY',
+         'artistName': 'Various Artists', 'releaseDate': '2020-10-07T07:00:00Z'},
+        {'wrapperType': 'track', 'kind': 'song', 'trackName': '無限抱擁', 'trackNumber': 10,
+         'trackCount': 15, 'collectionId': 1, 'collectionName': 'EVANGELION FINALLY',
+         'artistName': '高橋洋子', 'collectionArtistName': 'Various Artists',
+         'releaseDate': '1996-05-22T07:00:00Z', 'primaryGenreName': 'アニメ'},
+    ]
+
+    def setUp(self):
+        core.release_date.cache_clear()
+
+    def test_album_tracks_take_the_release_date(self):
+        with patch.object(core, '_get', return_value=self.ROWS):
+            tracks = core.album_tracks(1)
+        self.assertEqual([t['releaseDate'][:10] for t in tracks], ['2020-10-07'])
+
+    def test_release_date_reads_the_collection(self):
+        with patch.object(core, '_get', return_value=self.ROWS[:1]) as get:
+            self.assertEqual(core.release_date(1)[:10], '2020-10-07')
+            core.release_date(1)
+        get.assert_called_once()
+
+    def test_various_artists_folder_keeps_the_singer(self):
+        hit = self.ROWS[1]
+        album = core.as_album(hit)
+        f = tags._fields(hit, album, core.artist_folder(album))
+        self.assertEqual((f['artist'], f['albumartist']), ('高橋洋子', 'Various Artists'))
+
+
 if __name__ == '__main__':
     unittest.main()
