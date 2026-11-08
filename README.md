@@ -218,7 +218,8 @@ Three things are yours to pick, because the metadata cannot settle them:
   English and spelled the way iTunes spells it (Progressive House, New Age,
   Soundtrack, Ballad …). The bucket never goes into the tag. The store's genre
   is offered first, translated where the store answers in its own language
-  (`ロック` → `Rock`). A name that cannot be put into English has to be picked
+  (`ロック` → `Rock`). iTunes' `R&B/Soul` becomes `R&B`, the library's
+  spelling. A name that cannot be put into English has to be picked
   from the list or typed in
 - **타입** — proposed, then confirmable. `Indies` never gets proposed since no
   external source knows about it

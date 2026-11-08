@@ -46,10 +46,12 @@ GENRE_TAGS = [
 
 # Names follow iTunes, and stores answer in their own language. The older
 # `OST` and `Hip Hop/Rap` tags map to the iTunes spelling (decision
-# 2026-10-31). Other non-English names are picked by hand.
+# 2026-10-31). Other non-English names are picked by hand. iTunes calls the
+# genre `R&B/Soul` in English, but the library writes `R&B` (all 48 Pop
+# tracks in that genre on 2026-11-08).
 GENRE_ALIASES = {
     'OST': 'Soundtrack', 'Hip Hop/Rap': 'Hip-Hop/Rap',
-    'ロック': 'Rock', 'R&B／ソウル': 'R&B',
+    'ロック': 'Rock', 'R&B／ソウル': 'R&B', 'R&B/Soul': 'R&B',
 }
 
 # Infer live and best-of releases from album titles because iTunes does not

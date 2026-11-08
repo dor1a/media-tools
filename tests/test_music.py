@@ -165,6 +165,7 @@ class GenreTagTests(unittest.TestCase):
         self.assertEqual(core.genre_tag('OST'), 'Soundtrack')
         self.assertEqual(core.genre_tag('ロック'), 'Rock')
         self.assertEqual(core.genre_tag('R&B／ソウル'), 'R&B')
+        self.assertEqual(core.genre_tag('R&B/Soul'), 'R&B')
         self.assertEqual(core.genre_tag(' Dance '), 'Dance')
         self.assertIsNone(core.genre_tag('ダンス'))
         self.assertIsNone(core.genre_tag(''))
